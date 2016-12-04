@@ -17,7 +17,6 @@
 
 #include <convexhull.hpp>
 
-#include <spherics.hpp>
 #include <cmath>
 #include <queue>
 #include <math.h>

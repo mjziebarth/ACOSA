@@ -114,7 +114,9 @@ cdef class VoronoiDelaunayTesselation:
 			nodes[i].lat = d2r*lat[i]
 		
 		# Create VDTesselation object:
+		print("calling VDTesselation()")
 		self.tesselation = new VDTesselation(nodes)
+		print("done.")
 		
 		if not self.tesselation:
 			raise Exception("VoronoiDelaunayTesselation() :\nCould not allocate "

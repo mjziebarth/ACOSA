@@ -25,7 +25,6 @@
  */
 
 #include <vdtesselation.hpp>
-
 #include <spherics.hpp>
 #include <fortunes_sphere.hpp>
 

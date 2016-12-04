@@ -29,6 +29,8 @@ _directive_defaults['binding'] = True
 import numpy as np
 
 
+
+
 # Extension:
 extensions=[]
 
@@ -38,12 +40,15 @@ extensions.append(Extension('acosa',
 	         'acosa/fortunes_sphere.cpp',
 	         'acosa/vdtesselation.cpp',
 	         'acosa/beach.cpp',
+	         'acosa/order_parameter.cpp',
 	         'acosa/spherics.cpp',
 	         'acosa/convexhull.cpp'],
 	include_dirs=[np.get_include(),'acosa'],
 	extra_compile_args=['-std=c++14'],
+	working="/home/malte/git/ACOSA",
 	language='c++'))
 
+extensions[0].cython_c_in_temp = False
 
 # Setup:
 

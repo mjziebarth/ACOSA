@@ -29,6 +29,8 @@
 #include <iostream>
 
 namespace ACOSA {
+	
+//typedef ArcIntersect::pos_t pos_t;
 
 /* ****************************************************************** */
 /*                        class ArcIntersect                          */
@@ -37,7 +39,7 @@ ArcIntersect::ArcIntersect()
 {
 }
 
-ArcIntersect::ArcIntersect(double position, size_t id,
+ArcIntersect::ArcIntersect(const OrderParameter& position, size_t id,
 	const SphereVector& vec, const SphereVector& left)
 	: vec_(vec), id_(id), left_(left), pos(position)
 {
@@ -298,8 +300,18 @@ Beach::Beach(size_t id1, const SphereVector& v1, size_t id2,
 	}
 	tide =   v2.lat();
 	anchor = v1.lon();
-	ArcIntersect b1(0.5, id1, v1, v2);
-	ArcIntersect b2(1.5, id2, v2, v1);
+	OrderParameter middle 
+		= OrderParameter::between(OrderParameter::max(),
+		                          OrderParameter::min());
+	OrderParameter left
+		= OrderParameter::between(OrderParameter::min(), middle);
+	OrderParameter right 
+		= OrderParameter::between(OrderParameter::max(), middle);
+//	std::cout << "middle=" << middle.to_string() << "\n";
+//	std::cout << "left=" << left.to_string() << "\n";
+//	std::cout << "right=" << right.to_string() << "\n";
+	ArcIntersect b1(left, id1, v1, v2);
+	ArcIntersect b2(right, id2, v2, v1);
 	data.insert(BeachSite(b1, BeachSiteData()));
 	data.insert(BeachSite(b2, BeachSiteData()));
 }
@@ -364,25 +376,27 @@ BeachIterator Beach::insert_before(const BeachIterator& pos, size_t id,
 	
 	
 	/* Construct beach site to be inserted: */
-	double p;
+	OrderParameter p;
 	if (l.pos < r.pos){
 		/* Set position to be middle between both: */
-		p = 0.5*(l.pos + r.pos);
+		p = OrderParameter::between(l.pos, r.pos);
 	} else if (l.pos > r.pos){
 		/* Set position to either be in between left and 2.0
 		 * or right and 0.0 - whichever is the bigger interval.
 		 * This should cause the position interval [0.0, 2.0] to
 		 * stay somewhat uniformly sampled. */
-		double dl = 2.0-l.pos;
-		double dr = r.pos;
+		double dl = OrderParameter::max() - l.pos;
+		double dr = OrderParameter::min() - r.pos;
 		if (dr > dl){
-			p = 0.5*dr;
+			p = OrderParameter::between(r.pos, OrderParameter::min());
 		} else {
-			p = l.pos + 0.5*dl;
+			p = OrderParameter::between(l.pos, OrderParameter::max());
 		}
 	} else {
 		std::cerr << "ERROR : Beach::insert_before() :\nTwo positions "
 			"equal!\n";
+		std::cerr << "\tleft = " << l.pos.to_string() << "\n"
+		             "\tright= " << r.pos.to_string() << "\n";
 		throw;
 	}
 	ArcIntersect m(p, id, vec, l.vec_);
@@ -464,7 +478,8 @@ void Beach::print_debug() const
 	std::cout << "\nTIDE: " << tide << ", ANCHOR: " << anchor;
 	std::cout << "\nID and sort parameter:\n{";
 	for (auto it = data.begin(); it != data.end(); ++it){
-		std::cout << it->first.id_ << "[" << it->first.pos <<  "],"; 
+		std::cout << it->first.id_ << "[" << it->first.pos.to_string()
+		          <<  "],"; 
 	}
 	std::cout.precision(3);
 	std::cout << "}\ncoordinates:\n{";
@@ -487,6 +502,7 @@ void Beach::print_debug() const
 	
 }
 
+//----------------------------------------------------------------------
 bool Beach::check_consistency(double tide) const
 {
 	double anchor = data.begin()->first.lon_left(tide, 0.0);

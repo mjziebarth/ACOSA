@@ -17,6 +17,7 @@
 
 
 #include <basic_types.hpp>
+#include <iostream>
 
 namespace ACOSA {
 
@@ -25,6 +26,12 @@ namespace ACOSA {
 Triangle::Triangle(size_t i, size_t j, size_t k)
 	: i(i), j(j), k(k)
 {
+	if (i==j || i==k || j==k){
+		std::cerr << "Created a Delaunay triangle with two equal "
+			"borders!\n\ti=" << i << "\n\tj=" << j << "\n\tk=" << k
+			<< "\n";
+		throw 0;
+	}
 }
 
 Triangle::Triangle(): i(0), j(0), k(0)
