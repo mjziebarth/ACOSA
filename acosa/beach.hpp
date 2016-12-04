@@ -43,8 +43,6 @@ class ArcIntersect {
 	friend class Beach;
 	
 	public:
-//		typedef unsigned long pos_t;
-		
 		ArcIntersect(const OrderParameter& position, size_t id,
 		             const SphereVector& vec, const SphereVector& left);
 	
@@ -91,12 +89,6 @@ class BeachSiteData {
 	private:
 		/* A reference to the circle event: */
 		std::shared_ptr<bool> valid_;
-		
-//		/* An index to the iterator corresponding to this beach site
-//		 * in the beach site iterator vector: */
-//		size_t iterator_index;
-	
-	
 };
 
 
@@ -189,13 +181,9 @@ class Beach {
 		ArcIntersectComparator compare;
 	
 		std::map<ArcIntersect,BeachSiteData,ArcIntersectComparator> data;
-		
-//		std::vector<std::pair<bool, decltype(data)::iterator>>
-//			data_iterators;
-//		std::priority_queue<size_t> data_iterators_free_indices;
-			
-	
 };
+
+
 
 class CircleEvent;
 

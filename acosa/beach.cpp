@@ -29,8 +29,6 @@
 #include <iostream>
 
 namespace ACOSA {
-	
-//typedef ArcIntersect::pos_t pos_t;
 
 /* ****************************************************************** */
 /*                        class ArcIntersect                          */
@@ -307,9 +305,6 @@ Beach::Beach(size_t id1, const SphereVector& v1, size_t id2,
 		= OrderParameter::between(OrderParameter::min(), middle);
 	OrderParameter right 
 		= OrderParameter::between(OrderParameter::max(), middle);
-//	std::cout << "middle=" << middle.to_string() << "\n";
-//	std::cout << "left=" << left.to_string() << "\n";
-//	std::cout << "right=" << right.to_string() << "\n";
 	ArcIntersect b1(left, id1, v1, v2);
 	ArcIntersect b2(right, id2, v2, v1);
 	data.insert(BeachSite(b1, BeachSiteData()));
