@@ -148,6 +148,13 @@ SphereVectorEuclid::operator+(const SphereVectorEuclid& other) const
 double SphereVectorEuclid::distance(const SphereVectorEuclid& other)
 	const
 {
+	/* Snippet adapted from pik-copan/pyunicorn.
+	 * On a unit sphere, the native distance metric is the greatcircle
+	 * distance, which equals angles between the point vectors.
+	 * Angles between vectors v1 and v2 can be calculated using the
+	 * dot product relation
+	 *     v1 * v2 = |v1| |v2| cos(angle(v1,v2))
+	 */
 	double d = operator*(other);
 	if (d > 1.0){
 		return 0.0;
