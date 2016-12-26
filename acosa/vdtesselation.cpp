@@ -356,9 +356,10 @@ void VDTesselation::associated_nodes(
 	}
 	
 	associated.resize(count);
+	size_t j=0;
 	for (size_t i=0; i<N; ++i){
 		if (marked[i])
-			associated.push_back(i);
+			associated[j++] = i;
 	}
 }
 
