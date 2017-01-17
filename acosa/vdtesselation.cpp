@@ -340,13 +340,6 @@ void VDTesselation::calculate_voronoi_network() const
 					break;
 				}
 			}
-			if (!found){
-				std::cerr << "FOUND NO CLOSED PATH!\n";
-			}
-		}
-		if (!delaunay_triangles[path.front()].common_border(delaunay_triangles[path.back()])){
-			std::cerr << "PATH FOUND BUT NOT CLOSED! (node=" << i << ") ("
-			          << 180.0/M_PI*nodes[i].lon << "," << 180.0/M_PI*nodes[i].lat << ")\n";
 		}
 
 		/* Along this closed path, we can now calculate the cell areas
@@ -436,89 +429,13 @@ void VDTesselation::calculate_voronoi_network() const
 		voronoi_links[i] = voronoi_links[2*i];
 	}
 
+	voronoi_links.resize(voronoi_links.size()/2);
+
 
 	/* Cache state: */
 	cache_state |= (VORONOI_LINKS_CACHED | VORONOI_CELLS_CACHED);
 	tidy_up_cache();
 }
-
-
-
-//void VDTesselation::calculate_voronoi_network() const
-//{
-//	/* Check if we've previously calculated the Voronoi network: */
-//	if (cache_state & VORONOI_LINKS_CACHED)
-//		return;
-	
-//	/* First make sure that Voronoi nodes are calculated: */
-//	calculate_voronoi_nodes();
-	
-//	/* Temporary class for saving voronoi edges as values: */
-//	struct vedge_t {
-//		/* Constructor: */
-//		vedge_t(){
-//			N = 0;
-//			ids[0] = -1;
-//			ids[1] = -1;
-//		}
-		
-//		/* Append one id: */
-//		void append(size_t id){
-//			if (N == 2){
-//				std::cerr << "Voronoi edges connect exactly two "
-//				             "Delaunay triangles!\n"
-//				             "   id[0] = " << ids[0] << "\n   id[1] = "
-//				          << ids[1] << "\n";
-//				throw 0;
-//			}
-//			ids[N++] = id;
-//		}
-		
-		
-//		unsigned char N;
-//		size_t        ids[2];
-		
-//	};
-	
-//	/* In a map, we save triangle references by their links: */
-//	std::map<link_t, vedge_t> references;
-	
-//	for (size_t i=0; i<delaunay_triangles.size(); ++i){
-//		references[link_t(delaunay_triangles[i].i,
-//		                  delaunay_triangles[i].j)].append(i);
-//		references[link_t(delaunay_triangles[i].i,
-//		                  delaunay_triangles[i].k)].append(i);
-//		references[link_t(delaunay_triangles[i].j,
-//		                  delaunay_triangles[i].k)].append(i);
-//	}
-	
-//	/* Extract links from map: */
-//	std::set<link_t> links;
-//	for (const std::pair<link_t,vedge_t>& p : references){
-//		if (p.second.N != 2){
-//			std::cerr << "Voronoi edges connect exactly two "
-//			             "Delaunay triangles!\n"
-//			             "   N = " << (int)p.second.N << "\n";
-//			throw 0;
-//		}
-//		links.insert(link_t(p.second.ids[0], p.second.ids[1]));
-//	}
-//	references.clear();
-
-//	/* Insert links to return array: */
-//	voronoi_links.reserve(links.size());
-//	for (auto it = links.begin(); it != links.end(); ++it){
-//		voronoi_links.emplace_back(it->i, it->j);
-//	}
-	
-////	/* Merge clusters: */
-////	merge_clusters(voronoi_nodes, voronoi_links);
-
-//	/* Cache state: */
-//	cache_state |= VORONOI_LINKS_CACHED;
-//	tidy_up_cache();
-	
-//}
 
 //----------------------------------------------------------------------
 void VDTesselation::calculate_voronoi_cell_areas() const
@@ -530,83 +447,6 @@ void VDTesselation::calculate_voronoi_cell_areas() const
 
 	/* Calculation of Voronoi links makes calculating the weight easy: */
 	calculate_voronoi_network();
-	
-//	/* We need the Voronoi nodes: */
-//	calculate_voronoi_nodes();
-	
-//	/* For each node, we need all surrounding Voronoi nodes.
-//	 * Each Voronoi node corresponds to a Delaunay triangle, so we
-//	 * first add references to all Delaunay triangles a node is part
-//	 * of: */
-//	std::vector<std::forward_list<size_t>> node2triangle(nodes.size());
-//	for (size_t i=0; i<delaunay_triangles.size(); ++i){
-//		node2triangle[delaunay_triangles[i].i].push_front(i);
-//		node2triangle[delaunay_triangles[i].j].push_front(i);
-//		node2triangle[delaunay_triangles[i].k].push_front(i);
-//	}
-	
-//	/* Init destination vector: */
-//	voronoi_areas.resize(nodes.size(), 0.0);
-	
-//	/* Now we iterate over all nodes and calculate the Voronoi cell
-//	 * areas: */
-//	std::vector<size_t> path;
-	
-//	struct helper_t {
-//		bool   available;
-//		size_t id;
-//		Triangle t;
-//	};
-//	std::vector<helper_t> local_triangles;
-//	for (size_t i=0; i<nodes.size(); ++i){
-//		/* First, calculate a closed path to traverse the edge of the
-//		 * Voronoi cell.
-//		 * Create a local copy of the set of triangles belonging to node
-//		 * i: */
-//		local_triangles.resize(0);
-//		for (size_t t : node2triangle[i]){
-//			local_triangles.push_back({true, t, delaunay_triangles[t]});
-//		}
-//		node2triangle[i].clear();
-		
-//		/* Find a closed path: */
-//		path.resize(0);
-//		path.push_back(local_triangles[0].id);
-//		Triangle last = local_triangles[0].t;
-//		for (size_t j=1; j<local_triangles.size(); ++j){
-//			bool found = false;
-//			for (size_t k=1; k<local_triangles.size(); ++k){
-//				if (!local_triangles[k].available)
-//					continue;
-//				if (last.common_border(local_triangles[k].t)){
-//					path.push_back(local_triangles[k].id);
-//					last = local_triangles[k].t;
-//					local_triangles[k].available = false;
-//					found = true;
-//					break;
-//				}
-//			}
-//		}
-		
-//		/* Along this closed path, we can now calculate the cell areas
-//		 * of the Voronoi cells using adjacent triangles: */
-//		double area = 0.0;
-//		SphereVectorEuclid last_vec(voronoi_nodes[path[0]]);
-//		SphereVectorEuclid v_i(nodes[i]);
-//		for (size_t j=1; j<path.size(); ++j){
-//			SphereVectorEuclid next(voronoi_nodes[path[j]]);
-//			area += SphereVectorEuclid::triangle_area(last_vec, next,
-//			                                          v_i);
-//			last_vec = next;
-//		}
-//		area += SphereVectorEuclid::triangle_area(last_vec, v_i,
-//		                    SphereVectorEuclid(voronoi_nodes[path[0]]));
-//		voronoi_areas[i] = area;
-//	}
-	
-//	/* Cache state: */
-//	cache_state |= VORONOI_CELLS_CACHED;
-//	tidy_up_cache();
 }
 
 

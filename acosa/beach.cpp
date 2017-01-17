@@ -335,22 +335,16 @@ Beach::Beach(const std::vector<size_t>& ids,
 
 	/* Step 1: Insert all nodes to beach: */
 	double max = std::numeric_limits<unsigned long>::max();
-//	std::cout << "   max=" << max << "\n";
 	std::vector<BeachIterator> iterators;
 	iterators.reserve(vecs.size());
 	size_t l = vecs.size()-1;
 	for (size_t i=0; i<vecs.size(); ++i){
 		unsigned long ul = (max * (0.1+0.4*vecs[i].lon()/M_PI));
-//		std::cout << "   ul=" << ul << " (from lon=" << vecs[i].lon() << ", ld=" << ld << ")\n";
 		OrderParameter op(ul);
 		ArcIntersect ai(op, ids[i], vecs[i], vecs[l]);
 		iterators.emplace_back(this, data.insert(BeachSite(ai,
 		                       BeachSiteData())).first, tide);
 		l = (l+1) % vecs.size();
-
-//		std::cout << "ArcIntersect[" << i << "]:\n"
-//		             "   left.lon() = " << ai.left_.lon() << "\n"
-//		             "    vec.lon() = " << ai.vec_.lon() << "\n";
 	}
 
 
@@ -359,7 +353,6 @@ Beach::Beach(const std::vector<size_t>& ids,
 	l = vecs.size()-1;
 	for (size_t i=0; i<vecs.size(); ++i){
 		CircleEvent event(0.25*M_PI, iterators[i]);
-//		std::cout << "   created circle event with lat=" << event.lat() << "\n";
 		event.set_valid();
 		circle_events.push(event);
 		iterators[i]->second.register_circle_event_ptr(event.valid_);
@@ -427,31 +420,6 @@ BeachIterator Beach::find_insert_position(double d, double tide,
 	
 	/* Find iterator: */
 	BeachIterator::internal_iterator it = data.lower_bound<double>(d);
-
-//	if (it == data.end()){
-//		std::cout << "FOUND THE END!\n";
-//	}
-
-
-//	double  corrected = (d-anchor < 0) ? d-anchor + 2.0*M_PI : d-anchor;
-//	std::cout << "     anchor:           =" << 180.0/M_PI*anchor << "\n"
-//	          << "     insert position: d=" << 180.0/M_PI*d << "\n"
-//	          << "        -> corrected:  =" << 180.0/M_PI*corrected << "\n"
-//	          << "     lower_bound       =" << 180.0/M_PI*it->first.lon_left(tide, anchor) << "\n"
-//	          << "        -> vec_.lon()  =" << 180.0/M_PI*it->first.vec_.lon() << "\n"
-//	          << "        -> left_.lon() =" << 180.0/M_PI*it->first.left_.lon() << "\n"
-//	          << "        -> id()        =" << it->first.id() << "\n";
-
-//	std::cout << "beach structure:\n[";
-//	for (auto it = data.begin(); it != data.end(); ++it){
-//		std::cout << "(" << it->first.id() << ": border: " << 180.0/M_PI*it->first.lon_left(tide, anchor)
-//		          << ", left.lon=" << 180.0/M_PI*it->first.left_.lon() << ", lon()="
-//		          << 180.0/M_PI*it->first.vec_.lon()
-//		          << "), ";
-//	}
-//	std::cout << "]\n";
-
-
 		
 	/* Construct iterator: */
 	return BeachIterator(this, it, tide);
