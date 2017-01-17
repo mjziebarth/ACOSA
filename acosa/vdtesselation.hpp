@@ -44,6 +44,24 @@ namespace ACOSA {
  */
 class VDTesselation {
 	public:
+		/*! \brief An enumeration of algorithms available to calculate
+		 *         the Delaunay tesselation.*/
+		enum delaunay_algorithm_t {
+			/*! \brief The fortune's sweepline algorithms adapted for
+			 *         spherical geometries from [1].
+			 *         Its complexity is O(N*log(N))
+			 */
+			FORTUNES,
+			/*! \brief An explicit algorithms that tests triples of
+			 *         nodes for the Delaunay condition.
+			 *         Its complexity is O(N^4).
+			 *         Though not useful for practical purposes, it
+			 *         can be used for debugging / testint purposes.
+			 */
+			BRUTE_FORCE
+		};
+
+
 		/* The number of nodes of the original network: */
 		const size_t N;
 		
@@ -58,7 +76,9 @@ class VDTesselation {
 		 * This method executes the O(N*log(N)) sweepline algorithm
 		 * from [1].
 		 */
-		VDTesselation(const std::vector<Node>& nodes);
+		VDTesselation(const std::vector<Node>& nodes,
+		              double tolerance = 1e-8,
+					  delaunay_algorithm_t algorithm = FORTUNES);
 		
 		/*!
 		 * \brief Obtain the set of links of the Delaunay triangulation.
@@ -112,11 +132,27 @@ class VDTesselation {
 		 */
 		void associated_nodes(const std::vector<size_t>& voronoi_nodes,
 			std::vector<size_t>& associated) const;
+
+		/*!
+		 * \brief Print a debug output of the current state to standard
+		 *        output.
+		 */
+		void print_debug(bool sort_triangles = true) const;
 	
 	private:
-		/* This variable is holds the initial delaunay triangulation
+		/* This variable holds the tolerance that has been set: */
+		const double tolerance;
+
+		/* This variable holds the initial delaunay triangulation
 		 * in form of a list of triangles. */
 		mutable std::vector<Triangle> delaunay_triangles;
+
+		/* A cluster merge might have been done. In that case,
+		 * the map of Delaunay triangles to Voronoi nodes is surjective
+		 * but not injective: Multiple Delaunay triangles may belong
+		 * to the same Voronoi nodes (which is the case if more than
+		 * 3 nodes of the original network lie on a circle). */
+		mutable std::vector<size_t>   delaunay2voronoi;
 		
 		/* Cached variables: */
 		mutable unsigned char cache_state;
@@ -140,6 +176,8 @@ class VDTesselation {
 		void calculate_voronoi_network() const;
 		
 		void calculate_voronoi_cell_areas() const;
+
+		void merge_clusters() const;
 		
 		void tidy_up_cache() const;
 };

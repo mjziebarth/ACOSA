@@ -50,23 +50,27 @@ struct configuration {
 	size_t N;
 	size_t runs;
 	bool   test_order_param;
+	bool   regular_grid;
+	char   grid_type;
 	size_t r;
 	bool r_selected;
+	bool    scaled_dbg_output;
 };
 
 
 static configuration get_config(int argc, char **argv){
-	configuration conf = {0,  1, false, 0, false};
+	configuration conf = {0,  1, false, false, 0, 0, false, false};
 	
 	char *Nvalue = nullptr;
 	char *Rvalue = nullptr;
 	char *rvalue = nullptr;
+	char *gridtype = nullptr;
 	int index;
 	int c;
 
 	opterr = 0;
 
-	while ((c = getopt (argc, argv, "R:ON:r:")) != -1){
+	while ((c = getopt (argc, argv, "R:ON:r:G:D")) != -1){
 		switch (c)
 		{
 			case 'r':
@@ -81,6 +85,15 @@ static configuration get_config(int argc, char **argv){
 				conf.test_order_param = true;
 				std::cout << "Testing order parameter!\n";
 				break;
+		    case 'G':
+			    gridtype = optarg;
+			    conf.regular_grid = true;
+				std::cout << "Using a regular grid.\n";
+			    break;
+		    case 'D':
+			    conf.scaled_dbg_output = true;
+				std::cout << "Using extra debug output.\n";
+			    break;
 			case 'N':
 				Nvalue = optarg;
 				std::cout << "Nvalue: '" << Nvalue << "'\n";
@@ -90,7 +103,7 @@ static configuration get_config(int argc, char **argv){
 					std::cerr << "Option -" << optopt
 					          << " requires an argument.\n";
 				else if (isprint(optopt))
-					std::cerr << "Unknown option '-" << optopt << ".\n";
+					std::cerr << "Unknown option '-" << (char)optopt << "\'.\n";
 				else
 					std::cerr << "Unknown option character '"
 							  << (char)optopt  << "'\n";
@@ -107,6 +120,9 @@ static configuration get_config(int argc, char **argv){
 	if (rvalue){
 		conf.r_selected = true;
 		conf.r = std::atol(rvalue);
+	}
+	if (gridtype){
+		conf.grid_type = std::atoi(gridtype);
 	}
 	return conf;
 }
@@ -157,6 +173,25 @@ void test_order_parameter(size_t N) {
 }
 
 
+size_t longitude_grid_points(size_t N)
+{
+	/* Start a guess such that guess*(guess/2) = N */
+	size_t guess = sqrt(2*N);
+
+	/* Now find biggest smaller factor of N: */
+	while (guess && N % guess){
+		--guess;
+	}
+
+	if (!guess){
+		std::cerr << "ERROR : N does not have any factors smaller than sqrt(N/2)!\n";
+		exit(-1);
+	}
+
+	return guess;
+}
+
+
 
 
 
@@ -178,6 +213,13 @@ void test_order_parameter(size_t N) {
  * "-r x" : Selects r := x, the number of the first executed run (all
  *          other runs are empty generated nodes. This is a feature to
  *          select a known bad run for a certain seed for debugging).
+ * "-G x" : Nodes are distributed on a regular grid instead of being
+ *          randomly distributed. The grid type is tweaked using x:
+ *          x=0: Grid is rectangular in longitude/latitude space.
+ *          x=1: Grid is (near) hexagonal in lon/lat space (every
+ *               second line is shifted by half a grid distance
+ *               in longitude).
+ * "-D"   : Print debug output that scales with N.
  * "-O"   : A different test mode is chosen where the OrderParameter
  *          class is tested.
  */
@@ -201,20 +243,43 @@ int main(int argc, char **argv){
 	
 	/* Initialize random number generator: */
 	long seed = random_seed();
-	std::cout << "Create random nodes. (seed=" << seed << ")\n";
+	if (!c.regular_grid){
+		std::cout << "Create random nodes. (seed=" << seed << ")\n";
+	}
 	std::mt19937_64 engine(random_seed());
 	std::uniform_real_distribution<double> generator;
 	
 	for (size_t r=0; r<c.runs; ++r){
 		std::cout << "run " << r << "/" << c.runs << "\n";
-		
-		/* Create random nodes: */
+
+		/* Create node positions:: */
 		std::vector<ACOSA::Node> nodes(N);
-		for (size_t i=0; i<N; ++i){
-			nodes[i] = ACOSA::Node(2*M_PI*generator(engine),
-								   M_PI*(0.5-generator(engine)));
+		if (c.regular_grid){
+			/* Create regular grid: */
+			size_t n_lon = longitude_grid_points(N);
+			size_t n_lat = N/n_lon;
+			std::cout << "Create regular grid.\n\tn_lon=" << n_lon <<
+			             "\n\tn_lat=" << n_lat << "\n";
+			for (size_t j=0; j<n_lat; ++j){
+				for (size_t i=0; i<n_lon; ++i){
+					double lon;
+					if (c.grid_type == 0){
+						lon = 2*M_PI*((double)i)/n_lon;
+					} else if (c.grid_type == 1){
+						lon = 2*M_PI*((double)i + 0.5*(j % 2))/n_lon;
+					}
+					double lat = -M_PI*(0.5-((double)j+1)/(n_lat+1));
+					nodes[n_lon*j+i] = ACOSA::Node(lon, lat);
+				}
+			}
+		} else {
+			/* Create random nodes: */
+			for (size_t i=0; i<N; ++i){
+				nodes[i] = ACOSA::Node(2*M_PI*generator(engine),
+				                       M_PI*(0.5-generator(engine)));
+			}
 		}
-		
+
 		if (c.r_selected && r != c.r){
 			/* If we want a certain run, fast forward: */
 			std::cout << "  --> skipping.\n";
@@ -224,13 +289,34 @@ int main(int argc, char **argv){
 		/* Create tesselation: */
 		std::cout << "Create tesselation.\n";
 		ACOSA::VDTesselation tesselation(nodes);
-		
+		if (c.scaled_dbg_output){
+			tesselation.print_debug(false);
+		}
 		
 		/* Obtain network: */
 		std::cout << "Obtain Voronoi network.\n";
 		std::vector<ACOSA::Node> voronoi_nodes;
 		std::vector<ACOSA::Link> voronoi_links;
-		tesselation.voronoi_tesselation(voronoi_nodes, voronoi_links);
+		try {
+			tesselation.voronoi_tesselation(voronoi_nodes, voronoi_links);
+			std::cerr << "\n\nWE GOOOD!\n\n\n\n\n\n";
+		} catch (int excpt){
+			std::cerr << "EXCEPTION!\n\n\n\n\n\n";
+
+			return 0;
+//			tesselation.print_debug();
+
+			std::cout << "\n\n--- Alternative tesselation: ---\n";
+			ACOSA::VDTesselation tess2(nodes, 1e-8,
+			                           ACOSA::VDTesselation::BRUTE_FORCE);
+			try {
+				tess2.voronoi_tesselation(voronoi_nodes, voronoi_links);
+			} catch (int except) {
+			}
+
+			tess2.print_debug(false);
+		}
+
 		voronoi_nodes.clear();
 		voronoi_links.clear();
 		
@@ -238,6 +324,13 @@ int main(int argc, char **argv){
 		std::cout << "Obtain Voronoi areas.\n";
 		std::vector<double> weights;
 		tesselation.voronoi_cell_areas(weights);
+		double total_weight = 0.0;
+		for (double w : weights){
+			total_weight += w;
+		}
+		std::cout << "  --> total weight: " << total_weight << "\n"
+		             "      (that's " << total_weight-4.0*M_PI
+		          << " difference to 4pi)\n";
 		
 		/* Obtain Delaunay tesselation: */
 		std::cout << "Obtain Delaunay tesselation.\n";

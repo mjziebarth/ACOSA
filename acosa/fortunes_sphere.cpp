@@ -26,181 +26,141 @@
 #include <fortunes_sphere.hpp>
 #include <spherics.hpp>
 #include <beach.hpp>
+#include <circleevent.hpp>
 
 
 #include <queue>
 #include <memory>
+#include <algorithm>
 
 #include <iostream>
 
 #include <limits>
 
+
 namespace ACOSA {
 
-//######################################################################
-
-class CircleEvent;
-
-typedef std::priority_queue<CircleEvent, std::vector<CircleEvent>,
-	                        std::greater<CircleEvent>>
-	    eventqueue_t;
-
-
-
 
 //######################################################################
-class CircleEvent {
-	public:
-		CircleEvent(const SphereVector& v1, const SphereVector& v2,
-					const SphereVector& v3, const BeachIterator& it);
-		
-		double lat() const;
-		
-		bool operator<(const CircleEvent& other) const;
-		
-		bool operator>(const CircleEvent& other) const;
-		
-		void invalidate();
-		void set_valid();
-		
-		bool valid() const;
-		
-		void set_beach_site_iterator(const BeachIterator& iterator);
-		
-	public:
-		std::shared_ptr<bool> valid_;
-		double                lat_;
-		BeachIterator     beach_site;
+
+struct site_event_t {
+	site_event_t(double lon, double lat, size_t id)
+	    : vec(lon, lat), id(id)
+	{}
+
+	bool operator<(const site_event_t& other) const {
+		if (vec.lat() == other.vec.lat()){
+			return vec.lon() < other.vec.lon();
+		}
+		return vec.lat() > other.vec.lat();
+	}
+
+	SphereVector vec;
+	size_t id;
 };
 
 
 
 //----------------------------------------------------------------------
-CircleEvent::CircleEvent(const SphereVector& v1, const SphereVector& v2,
-	const SphereVector& v3, const BeachIterator& it)
-	: beach_site(it)
-{
-	/* Calculate circumcenter: */
-	SphereVectorEuclid e1(v1), e2(v2), e3(v3);
-	SphereVectorEuclid cc = SphereVectorEuclid::circumcenter(e1,e2,e3);
-	
-	/* Calculate maximum latitude of circumcircle: */
-	double d = cc.distance(e1);
-	
-	lat_ = cc.lat() + d;
-	
-	/* Copy iterator and set new latitude: */
-
-	beach_site.tide_ = lat_;
-}
-
-
-
-//----------------------------------------------------------------------
-double CircleEvent::lat() const
-{
-	return lat_;
-}
-
-
-//----------------------------------------------------------------------
-bool CircleEvent::operator<(const CircleEvent& other) const
-{
-	return lat_ < other.lat_;
-}
-
-//----------------------------------------------------------------------
-bool CircleEvent::operator>(const CircleEvent& other) const
-{
-	return lat_ > other.lat_;
-}
-
-//----------------------------------------------------------------------
-void CircleEvent::set_beach_site_iterator(const BeachIterator&
-	iterator)
-{
-	beach_site = iterator;
-}
-
-//----------------------------------------------------------------------
-void CircleEvent::invalidate(){
-	if (valid_){
-		*valid_ = false;
-		valid_.reset();
-	}
-}
-
-//----------------------------------------------------------------------
-void CircleEvent::set_valid() {
-	valid_ = std::make_shared<bool>(true);
-}
-
-//----------------------------------------------------------------------
-bool CircleEvent::valid() const
-{
-	return valid_ && *valid_;
-}
-
-
-//######################################################################
-
-
-//----------------------------------------------------------------------
-void voronoi_tesselation_sphere(const std::vector<Node>& nodes,
-	std::vector<Node>& voronoi_nodes, std::vector<Link>& voronoi_links)
-{
-	/* Call Delaunay triangulation: */
-	std::vector<Triangle> delaunay_triangles;
-	delaunay_triangulation_sphere(nodes, delaunay_triangles);
-}
-
-void voronoi_weights_sphere(const std::vector<Node>& nodes,
-	std::vector<double>& weights);
-
-
-
-//----------------------------------------------------------------------
 static std::shared_ptr<bool> add_circle_event(
-	eventqueue_t& queue, const SphereVector& v1,
+    eventqueue_t& queue, const SphereVector& v1,
     const SphereVector& v2, const SphereVector& v3, double tide,
-    const BeachIterator& beach_site)
+    const BeachIterator& beach_site, double tolerance)
 {
-	CircleEvent event(v1, v2, v3, beach_site);
-	if (event.lat() > tide){
+	CircleEvent event(v1, v2, v3, beach_site, tolerance);
+	if (event.lat()+tolerance >= tide){
+//		std::cout << "      with lat=" << 180.0/M_PI*event.lat() << " (delta = "
+//		          << 180.0/M_PI*(tide-event.lat()) << ")...\n";
 		event.set_valid();
 		queue.push(event);
 		return event.valid_;
-	} 
+	}
+//	std::cout << "      with lat=" << 180.0/M_PI*event.lat() << " (delta = "
+//	          << 180.0/M_PI*(tide-event.lat()) << ")...\n";
+//	std::cout << "   reject lat=" << 180.0/M_PI*event.lat() << "\n";
+//	std::cout << "   tide-lat  =" << 180.0/M_PI*(tide - event.lat()) << "\n";
 	return nullptr;
+}
+
+//----------------------------------------------------------------------
+template<typename site_queue_t>
+static inline Beach init_beach(site_queue_t& site_events,
+                            eventqueue_t& circle_events,
+                            std::vector<Triangle>& delaunay_triangles)
+{
+	/* Step 1): Obtain the first two site events: */
+	site_event_t e1 = site_events.top();
+	site_events.pop();
+	site_event_t e2 = site_events.top();
+	site_events.pop();
+
+	/* Step 2): Continue depending on whether we have a degeneracy
+	 *          where the first three sites have the same latitude
+	 *          (see [1])
+	 */
+	if (e1.vec.lat() == e2.vec.lat() &&
+	    site_events.top().vec.lat() == e1.vec.lat())
+	{
+//		std::cout << "   <init with degeneracy>\n";
+		/* Degeneracy.
+		 * Collect all sites with the same latitude: */
+		std::vector<site_event_t> sites;
+		sites.push_back(e1);
+		sites.push_back(e2);
+
+		while (site_events.top().vec.lat() == e1.vec.lat()){
+			sites.push_back(site_events.top());
+			site_events.pop();
+		}
+
+		/* Sort them by longitude: */
+		auto cmp = [](const site_event_t& l, const site_event_t& r)
+		{
+			return l.vec.lon() < r.vec.lon();
+		};
+
+		std::sort<std::vector<site_event_t>::iterator,
+		          decltype(cmp)>
+		    (sites.begin(), sites.end(), cmp);
+
+
+		/* Create one of the possible Delaunay triangulations
+		 * of the area inside the circumcircle: */
+		for (size_t i=2; i<sites.size(); ++i){
+//			std::cout << "emplacing triangle (" << sites[i].id << ","
+//			          << sites[i-1].id << "," << sites[0].id << ")\n";
+			delaunay_triangles.emplace_back(sites[i].id, sites[i-1].id,
+			    sites[0].id);
+		}
+
+		/* Fill vectors for beach constructor: */
+		std::vector<SphereVector> vecs(sites.size());
+		std::vector<size_t> ids(sites.size());
+
+		for (size_t i=0; i<sites.size(); ++i){
+			vecs[i] = sites[i].vec;
+			ids[i] = sites[i].id;
+		}
+
+		/* Create beach: */
+		return Beach(ids, vecs, circle_events);
+
+	} else {
+		/* No degeneracy: */
+//		std::cout << "init without degeneracy.\n";
+		return Beach(e1.id, e1.vec, e2.id, e2.vec);
+	}
 }
 
 
 //----------------------------------------------------------------------
 void delaunay_triangulation_sphere(const std::vector<Node>& nodes,
-	std::vector<Triangle>& delaunay_triangles)
+    std::vector<Triangle>& delaunay_triangles, double tolerance)
 {
 	const size_t N = nodes.size();
 	
-	/* 1) Priority queue of site events.
-	 *    1.1: Site event type: */
-	struct site_event_t {
-		site_event_t(double lon, double lat, size_t id)
-			: vec(lon, lat), id(id)
-		{}
-		
-		bool operator<(const site_event_t& other) const {
-			if (vec.lat() == other.vec.lat()){
-				return vec.lon() < other.vec.lon();
-			}
-			return vec.lat() > other.vec.lat();
-		}
-		
-		SphereVector vec;
-		size_t id;
-	};
-	
-	/* TODO: Remove this and replace by operator! */
-	/*    1.2: Site event comparison lambda: */
+	/* 1) Priority queue of site events. */
+	/*    Site event comparison lambda: */
 	auto cmp_site = 
 	    [](const site_event_t& l, const site_event_t& r)->bool
 		{
@@ -225,23 +185,33 @@ void delaunay_triangulation_sphere(const std::vector<Node>& nodes,
 	
 	
 	/* 3) Beach line (ordered): */
-	SphereVector v1 = site_events.top().vec;
-	size_t       i1 = site_events.top().id;
-	site_events.pop();
-	SphereVector v2 = site_events.top().vec;
-	size_t       i2 = site_events.top().id;
-	site_events.pop();
-	Beach beach(i1, v1, i2, v2);
+	Beach beach = init_beach(site_events, circle_events,
+	                         delaunay_triangles);
 	
 	
 	
 	/* Now we're ready for the algorithm! */
 	while (!site_events.empty() || !circle_events.empty())
 	{
+
+//		{
+//			auto it2 = beach.begin(site_events.top().vec.lat());
+//			std::cout << "\n --- beach: [";
+//			for (size_t i=0; i<beach.size(); ++i){
+//				std::cout << it2.id();
+//				if (i != beach.size()-1){
+//					std::cout << ", ";
+//				}
+//				++it2;
+//			}
+//			std::cout << "] ---\n";
+//		}
+
+
 		/* Decide whether the next event is a circle event or a site
 		 * event: */
 		if (!site_events.empty() && (circle_events.empty()
-			 || site_events.top().vec.lat() < 
+		     || site_events.top().vec.lat() <
 			    circle_events.top().lat()))
 		{
 			/* Site event comes first: */
@@ -249,6 +219,8 @@ void delaunay_triangulation_sphere(const std::vector<Node>& nodes,
 			size_t       id  = site_events.top().id;
 			site_events.pop();
 			double tide = vec.lat();
+
+//			std::cout << "Site event:  " << id << " (lat=" << 180.0/M_PI*vec.lat() << ")\n";
 			
 			/* Find iterator where to insert the site event into the
 			 * beach.
@@ -259,14 +231,18 @@ void delaunay_triangulation_sphere(const std::vector<Node>& nodes,
 			 *    site->lon() == it->lon_left()  :  it == p_j
 			 */
 			BeachIterator it = 
-				beach.find_insert_position(vec.lon(), vec.lat());
+			    beach.find_insert_position(vec.lon(), vec.lat(),
+			                               tolerance);
+
+//			std::cout << "   right bound: node " << it.id() << "\n";
 			
 			
 			/* Check for degenerate case 
 			 * 			vec.lon() == it->lon_left()
 			 */
-			if (it.lon_left_equal(vec.lon()))
+			if (it.lon_left_equal(vec.lon(), tolerance))
 			{
+//				std::cout << "   degenerate. (id=" << id << ")\n";
 				/* Degenerate case. The closest-point-line originating
 				 * from the inserted node (see [1]) meets the arc
 				 * intersect of 'it' and its left neighbour. Thus, we
@@ -277,12 +253,85 @@ void delaunay_triangulation_sphere(const std::vector<Node>& nodes,
 				 * split-off arc (of length 0).
 				 * Thus, we have to perform a combination of a site and
 				 * circle event. */
-				
-				
-				std::cerr << "ERROR : Degenerate case not handled.\n";
-				throw;
-				
+
+				/* Obtain beach site attributes.
+				 * Since the site is inserted between two arcs, we can
+				 * sort all relevant arcs into left and right arcs: */
+				SphereVector v_r1 = it.vec();
+				size_t       i_r1 = it.id();
+				++it; // p_r2
+				SphereVector v_r2 = it.vec();
+				size_t       i_r2 = it.id();
+				--it; // p_r1
+				--it; // p_l1
+				SphereVector v_l1 = it.vec();
+				size_t       i_l1 = it.id();
+				--it; // p_l2
+				SphereVector v_l2 = it.vec();
+				size_t       i_l2 = it.id();
+				++it; // p_l1
+
+
+//				{
+//					std::cout << "    - left:  " << i_l1 << "\n"
+//					          << "    - right: " << i_r1 << "\n";
+//					auto it2 = beach.begin(tide);
+//					std::cout << "    - beach: [";
+//					for (size_t i=0; i<beach.size(); ++i){
+//						std::cout << it2.id();
+//						if (i != beach.size()-1){
+//							std::cout << ", ";
+//						}
+//						++it2;
+//					}
+//					std::cout << "]\n";
+//				}
+
+				/* Invalidate the current beach event for node p_l1: */
+				beach.invalidate_circle_event(it);
+
+				/* Invalidate the current beach event for node p_r1: */
+				++it; // p_r1
+				beach.invalidate_circle_event(it);
+
+				/* Emplace the new beach site. This
+				 * automatically updates the beach site before it: */
+				it = beach.insert_before(it, id, vec);
+
+				/* Check for circle event [p_l2, p_l1, p_i]:  */
+				--it; // p_l1
+				auto ce = add_circle_event(circle_events, v_l2, v_l1, vec,
+				                           tide, it, tolerance);
+				if (ce){
+//					std::cout << "   added circle event [" << i_l2 << "," << i_l1 << "," << id << "] "
+//					             "(" << &*ce << ")\n";
+					beach.register_circle_event(it, ce);
+				}
+//				else {
+//					std::cout << "   rejected circle event [" << i_l2 << "," << i_l1 << "," << id << "]\n";
+//				}
+
+				/* Check for circle event [p_i, p_r1, p_r2]: */
+				++it; // p_i
+				++it; // p_r1
+				ce = add_circle_event(circle_events, vec, v_r1, v_r2,
+				                      tide, it, tolerance);
+				if (ce){
+//					std::cout << "   added circle event [" << id << "," << i_r1 << "," << i_r2 << "] "
+//					            "(" << &*ce << ")\n";
+					beach.register_circle_event(it, ce);
+				}
+//				else {
+//					std::cout << "   rejected circle event [" << id << "," << i_r1 << "," << i_r2 << "]\n";
+//				}
+
+				/* Finally, create Delaunay triangle: */
+//				std::cout << "   add triangle " << delaunay_triangles.size() << " in degenerate case. ("
+//				          << id << "," << i_l1 << "," << i_r1 << ")\n";
+				delaunay_triangles.emplace_back(id, i_l1, i_r1);
+
 			} else {
+//				std::cout << "   non-degenerate.\n";
 				/* Non-degenerate case. We split a beach site and
 				 * obtain two finite-length arcs. */
 				
@@ -311,20 +360,30 @@ void delaunay_triangulation_sphere(const std::vector<Node>& nodes,
 				/* Update the circle event for the split-off node v_j
 				 * if it exists ( [p_2, p_j, pi] ). */
 				auto ce = add_circle_event(circle_events, v_2, v_j, vec,
-									  tide, it);          
+				                           tide, it, tolerance);
 				if (ce){
+//					std::cout << "   added circle event [" << i_2 << "," << i_j << "," << id << "] "
+//					             "(" << &*ce << ")\n";
 					beach.register_circle_event(it, ce);
 				}
+//				else {
+//					std::cout << "   rejected circle event [" << i_2 << "," << i_j << "," << id << "]\n";
+//				}
 				
 				/* Update the circle event for the current node v_j
 				 * if it exists ( [p_i, p_j, p3] ): */
 				++it;
 				++it;
 				ce = add_circle_event(circle_events, vec, v_j, v_3,
-					                       tide, it);
+				                           tide, it, tolerance);
 				if (ce){
+//					std::cout << "   added circle event [" << id << "," << i_j << "," << i_3 << "] "
+//					             "(" << &*ce << ")\n";
 					beach.register_circle_event(it, ce);
 				}
+//				else {
+//					std::cout << "   rejected circle event [" << id << "," << i_j << "," << i_3 << "]\n";
+//				}
 			}
 			
 			
@@ -343,24 +402,33 @@ void delaunay_triangulation_sphere(const std::vector<Node>& nodes,
 			 * its right neighbour's left-vector: */
 			BeachIterator it = event.beach_site;
 			size_t        id = it.id();
-			
+			double      tide = event.lat();
+
 			beach.set_tide(it.tide());
 			it = beach.erase(it);
-			
 			
 			/* Left and right neighbours of removed node: */
 			ArcIntersect r = it->first;
 			--it;
 			ArcIntersect l = it->first;
+
+//			std::cout << "Circle event: (" << l.id() << ", " << id << ", " << r.id() << ") (lat="
+//			          << 180.0 / M_PI * tide << ")\n";
 			
 			if (beach.size() > 2){
 				/* Check left circle event: */
 				auto ce = add_circle_event(circle_events, l.left(), 
 				                           l.vec(),
-										   r.vec(), event.lat(), it);
+				                           r.vec(), tide, it,
+				                           tolerance);
 				if (ce){
+//					std::cout << "   added circle event [?," << l.id() << "," << r.id() << "] "
+//					             "(" << &*ce << ")\n";
 					beach.register_circle_event(it, ce);
 				}
+//				else {
+//					std::cout << "   rejected circle event [?," << l.id() << "," << r.id() << "]\n";
+//				}
 				
 				/* Check right circle event: */
 				++it;
@@ -368,11 +436,17 @@ void delaunay_triangulation_sphere(const std::vector<Node>& nodes,
 				ArcIntersect rr = it->first;
 				--it;
 				ce = add_circle_event(circle_events, r.left(), 
-										 r.vec(),
-										 rr.vec(), event.lat(), it);
+				                      r.vec(),
+				                      rr.vec(), tide, it,
+				                      tolerance);
 				if (ce){
+//					std::cout << "   added circle event [" << l.id() << "," << r.id() << "," << rr.id() << "] "
+//					             "(" << &*ce << ")\n";
 					beach.register_circle_event(it, ce);
 				}
+//				else {
+//					std::cout << "   rejected circle event [" << l.id() << "," << r.id() << "," << rr.id() << "]\n";
+//				}
 			}
 			
 			/* Valid event. Create Delaunay triangle: */

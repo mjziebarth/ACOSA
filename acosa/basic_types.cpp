@@ -63,6 +63,16 @@ Link::Link() : i(0), j(0)
 {
 }
 
+bool Link::operator==(const Link& other) const
+{
+	return i == other.i && j == other.j;
+}
+
+bool Link::operator!=(const Link& other) const
+{
+	return i != other.i || j != other.j;
+}
+
 //######################################################################
 
 Node::Node(double lon, double lat) : lon(lon), lat(lat)

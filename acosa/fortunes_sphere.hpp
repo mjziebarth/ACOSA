@@ -42,12 +42,19 @@ namespace ACOSA {
  *        a sphere.
  * \param nodes Vector of node coordinates.
  * \param delaunay_triangles Output vector of Delaunay triangles.
+ * \param tolerance A tolerance to account for numerical errors when
+ *                  calculating the geometric points.
  * 
  * The code is an implementation of the plane sweep Voronoi algorithm
  * described in [1]. It has complexity O(N*log(N)).
+ *
+ * The tolerance parameter is used when determining whether a circle
+ * event is above or below the sweepline. If no tolerance is used,
+ * numerical errors may falsify the results, especially for regular
+ * grids where circle events may coincide with the sweepline.
  * */
 void delaunay_triangulation_sphere(const std::vector<Node>& nodes,
-	std::vector<Triangle>& delaunay_triangles);
+    std::vector<Triangle>& delaunay_triangles, double tolerance);
 
 } // NAMESPACE ACOSA
 

@@ -29,14 +29,18 @@
 #include <map>
 #include <stddef.h>
 #include <math.h>
-#include <spherics.hpp>
 #include <order_parameter.hpp>
-#include <memory>
+#include <spherics.hpp>
+#include <queue>
 
 namespace ACOSA {
 
 class Beach;
 class CircleEvent;
+
+typedef std::priority_queue<CircleEvent, std::vector<CircleEvent>,
+                            std::greater<CircleEvent>>
+        eventqueue_t;
 
 class ArcIntersect {
 	friend struct ArcIntersectComparator;
@@ -47,7 +51,7 @@ class ArcIntersect {
 		             const SphereVector& vec, const SphereVector& left);
 	
 	
-		double lon_left(double tide, double anchor) const;
+		double lon_left(double tide, double anchor, bool correct=true) const;
 		
 		
 		size_t id() const;
@@ -105,10 +109,15 @@ class Beach {
 	public:
 		Beach(size_t id1, const SphereVector& v1, size_t id2,
 		      const SphereVector& v2);
+
+		Beach(const std::vector<size_t>& ids,
+		      const std::vector<SphereVector>& vecs,
+		      eventqueue_t& circle_events);
 		
 		BeachIterator begin(double tide);
 		
-		BeachIterator find_insert_position(double d, double tide);
+		BeachIterator find_insert_position(double d, double tide,
+		                                   double tolerance);
 		
 		/* Warning: The iterator 'pos' is invalidated! */
 		BeachIterator insert_before(const BeachIterator& pos, size_t id,
@@ -134,20 +143,24 @@ class Beach {
 		
 		mutable double tide   = 0.0;
 		mutable double anchor = 0.0;
+		mutable const ArcIntersect* first_arc = nullptr;
 	
 		struct ArcIntersectComparator
 		{
 			using is_transparent = std::true_type;
 			
-			ArcIntersectComparator(double* tide, double* anchor)
-				: tide(tide), anchor(anchor)
+			ArcIntersectComparator(double* tide, double* anchor,
+			                       const ArcIntersect** first)
+			    : tide(tide), anchor(anchor), first(first)
 			{}
 			
 			
 			/* Comparison data: */
 			double* tide = nullptr;
 			double* anchor = nullptr;
-			
+			const ArcIntersect* const * first = nullptr;
+
+
 			/* Comparison operators: */
 			
 			/* Compare beach sites by their ordering parameter: */
@@ -160,19 +173,25 @@ class Beach {
 			 * the left border of the arc: */
 			bool operator()(const ArcIntersect& l, double lon) const
 			{
+				if (&l == *first)
+					return true;
+
 				lon -= *anchor;
-				if (lon < 0.0)
+				if (lon <= 0.0)
 					lon += 2*M_PI;
-				
+
 				return l.lon_left(*tide, *anchor) < lon;
 			}
 			
 			bool operator()(double lon, const ArcIntersect& r) const
 			{
+				if (&r == *first)
+					return false;
+
 				lon -= *anchor;
-				if (lon < 0.0)
+				if (lon <= 0.0)
 					lon += 2*M_PI;
-				
+
 				return lon < r.lon_left(*tide, *anchor);
 			}
 		};
@@ -182,10 +201,6 @@ class Beach {
 	
 		std::map<ArcIntersect,BeachSiteData,ArcIntersectComparator> data;
 };
-
-
-
-class CircleEvent;
 
 /* An iterator  */
 class BeachIterator {
@@ -219,7 +234,7 @@ class BeachIterator {
 	
 		double tide() const;
 		
-		bool lon_left_equal(double lon) const;
+		bool lon_left_equal(double lon, double tolerance) const;
 	
 		/* For debugging purposes: */
 		bool is_valid() const;

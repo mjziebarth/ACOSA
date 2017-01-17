@@ -93,11 +93,16 @@ SphereVectorEuclid::SphereVectorEuclid(double x, double y, double z)
 
 //----------------------------------------------------------------------
 SphereVectorEuclid::SphereVectorEuclid(const SphereVector& vec)
+	: SphereVectorEuclid(vec.lon(), vec.lat())
 {
-	double clat = std::cos(vec.lat());
-	x = std::cos(vec.lon())*clat;
-	y = std::sin(vec.lon())*clat;
-	z = std::sin(vec.lat());
+}
+
+SphereVectorEuclid::SphereVectorEuclid(double lon, double lat)
+{
+	double clat = std::cos(lat);
+	x = std::cos(lon)*clat;
+	y = std::sin(lon)*clat;
+	z = std::sin(lat);
 }
 
 //----------------------------------------------------------------------
@@ -112,11 +117,16 @@ SphereVectorEuclid::SphereVectorEuclid(const Node& node)
 //----------------------------------------------------------------------
 double SphereVectorEuclid::lat() const 
 {
-	if (z > 1.0){
-		return 0.5*M_PI;
-	} else if (z < -1.0) {
-		return -0.5*M_PI;
+	if (z > 0.87){
+		return std::acos(std::sqrt(x*x+y*y));
+	} else if (z < -0.87){
+		return -std::acos(std::sqrt(x*x+y*y));
 	}
+//	if (z >= 1.0){
+//		return 0.5*M_PI;
+//	} else if (z <= -1.0) {
+//		return -0.5*M_PI;
+//	}
 	return std::asin(z);
 }
 
@@ -156,9 +166,9 @@ double SphereVectorEuclid::distance(const SphereVectorEuclid& other)
 	 *     v1 * v2 = |v1| |v2| cos(angle(v1,v2))
 	 */
 	double d = operator*(other);
-	if (d > 1.0){
+	if (d >= 1.0){
 		return 0.0;
-	} else if (d < -1.0){
+	} else if (d <= -1.0){
 		return M_PI;
 	}
 	return std::acos(d);

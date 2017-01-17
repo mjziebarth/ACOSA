@@ -24,9 +24,11 @@
  */
 
 #include <beach.hpp>
+#include <circleevent.hpp>
 
 #include <cmath>
 #include <iostream>
+#include <limits>
 
 namespace ACOSA {
 
@@ -85,8 +87,19 @@ static double acos_bounded(double c){
 }
 
 //----------------------------------------------------------------------
-double ArcIntersect::lon_left(double tide, double anchor) const
+double ArcIntersect::lon_left(double tide, double anchor, bool correct)
+    const
 {	
+	/* Sanity check (this is most important for regular lattices where
+	 * many nodes of equal latitude exist): */
+	if (tide <= vec_.lat() && correct){
+		double ll = vec_.lon()-anchor;
+		if (ll <= 0.0){
+			ll += 2.0*M_PI;
+		}
+		return ll;
+	}
+
 	/* Calculation following [1].*/
 	double stide = std::sin(tide);
 	double clat1 = std::cos(vec_.lat());
@@ -132,11 +145,13 @@ double ArcIntersect::lon_left(double tide, double anchor) const
 	}
 	
 	/* Start from anchor: */
-	lon -= anchor;
-	if (lon < 0.0){
-		lon += 2*M_PI;
+	if (correct){
+		lon -= anchor;
+		if (lon <= 0.0){
+			lon += 2*M_PI;
+		}
 	}
-	
+
 	return lon;
 }
 
@@ -163,6 +178,7 @@ void BeachSiteData::register_circle_event_ptr(
 void BeachSiteData::invalidate()
 {
 	if (valid_){
+//		std::cout << "   invalidate circle event (" << &*valid_ << ")\n";
 		*valid_ = false;
 		valid_.reset();
 	}
@@ -256,17 +272,20 @@ size_t BeachIterator::id() const
 
 
 //----------------------------------------------------------------------	
-bool BeachIterator::lon_left_equal(double lon) const
+bool BeachIterator::lon_left_equal(double lon, double tolerance) const
 {
 	/* Anchor from beach's first element: */
-	double anchor = beach->data.begin()->first.lon_left(tide_, 0.0);
+	double anchor = beach->data.begin()->first.lon_left(tide_, 0.0,
+	                                                    false);
 	
 	/* Transform longitude using anchor: */
 	lon -= anchor;
-	if (lon < 0.0)
+	if (lon <= 0.0)
 		lon += 2*M_PI;
 	
-	return it->first.lon_left(tide_, anchor) == lon;
+	double dlon = it->first.lon_left(tide_, anchor) - lon;
+
+	return  dlon > -tolerance && dlon < tolerance;
 }
 
 
@@ -288,14 +307,8 @@ bool BeachIterator::is_valid() const
 /* ****************************************************************** */
 Beach::Beach(size_t id1, const SphereVector& v1, size_t id2,
 	         const SphereVector& v2)
-	: compare(&tide, &anchor), data(compare)
+    : compare(&tide, &anchor, &first_arc), data(compare)
 {
-	if (v1.lat() == v2.lat()){
-		/* TODO! */
-		std::cerr << "Beach::Beach() :\nUnhandled degeneracy detected. "
-			"Aborting!\n";
-		throw;
-	}
 	tide =   v2.lat();
 	anchor = v1.lon();
 	OrderParameter middle 
@@ -312,13 +325,58 @@ Beach::Beach(size_t id1, const SphereVector& v1, size_t id2,
 }
 
 //----------------------------------------------------------------------
+Beach::Beach(const std::vector<size_t>& ids,
+             const std::vector<SphereVector>& vecs,
+             eventqueue_t& circle_events)
+    : compare(&tide, &anchor, &first_arc), data(compare)
+{
+	tide   = vecs[0].lat();
+	anchor = vecs[0].lon();
+
+	/* Step 1: Insert all nodes to beach: */
+	double max = std::numeric_limits<unsigned long>::max();
+//	std::cout << "   max=" << max << "\n";
+	std::vector<BeachIterator> iterators;
+	iterators.reserve(vecs.size());
+	size_t l = vecs.size()-1;
+	for (size_t i=0; i<vecs.size(); ++i){
+		unsigned long ul = (max * (0.1+0.4*vecs[i].lon()/M_PI));
+//		std::cout << "   ul=" << ul << " (from lon=" << vecs[i].lon() << ", ld=" << ld << ")\n";
+		OrderParameter op(ul);
+		ArcIntersect ai(op, ids[i], vecs[i], vecs[l]);
+		iterators.emplace_back(this, data.insert(BeachSite(ai,
+		                       BeachSiteData())).first, tide);
+		l = (l+1) % vecs.size();
+
+//		std::cout << "ArcIntersect[" << i << "]:\n"
+//		             "   left.lon() = " << ai.left_.lon() << "\n"
+//		             "    vec.lon() = " << ai.vec_.lon() << "\n";
+	}
+
+
+	/* Step 2: Create circle events for the new node at the north
+	 *         pole: */
+	l = vecs.size()-1;
+	for (size_t i=0; i<vecs.size(); ++i){
+		CircleEvent event(0.25*M_PI, iterators[i]);
+//		std::cout << "   created circle event with lat=" << event.lat() << "\n";
+		event.set_valid();
+		circle_events.push(event);
+		iterators[i]->second.register_circle_event_ptr(event.valid_);
+	}
+}
+
+
+
+//----------------------------------------------------------------------
 BeachIterator Beach::begin(double tide)
 {
 	return BeachIterator(this, data.begin(), tide);
 }
 
 //----------------------------------------------------------------------
-BeachIterator Beach::find_insert_position(double d, double tide)
+BeachIterator Beach::find_insert_position(double d, double tide,
+                                          double tolerance)
 {
 	/* A check if tide increases (or at least behaves monotonely): */
 	if (check_increasing_tide && tide < this->tide){
@@ -327,13 +385,73 @@ BeachIterator Beach::find_insert_position(double d, double tide)
 			<< "\nNew tide: " << tide << "\n";
 		throw;
 	}
-	
+
 	/* Adjust compare: */
 	this->tide   = tide;
-	anchor = data.begin()->first.lon_left(tide, 0.0);
+
+	/* The anchor is the left border of the arc of the first element
+	 * in the internal data map.
+	 * To represent the order of that set during the search, we have
+	 * to gauge the longitude coordinates so that they begin at the
+	 * anchor position.
+	 * Because the first element is guaranteed to be less than all
+	 * requested longitudes regardless of the result of its lon_left,
+	 * we can safely add a small additional constant (the tolerance)
+	 * to the anchor.
+	 * This guarantess that, if the left border of the first element
+	 * (calculated) is less than the node longitude to the left. This
+	 * can happen if the node to the left has been inserted at the
+	 * current tide. It will happen especially often on certain
+	 * regular grids.
+	 * Example: Node i (15°,15°) added in left of node j (30°,10°).
+	 * Now we insert node k at latitude 15° and request borders.
+	 * Because Node i has been added at lat. 15°, it will be
+	 * associated with its longitude 15°. Now there may be a
+	 * numerical error, such that j.left_border(15°)=14.9999999999995°
+	 * Because of this, node i, which should have border=360°,
+	 * will have left border = 5e-13. The order is broken.
+	 * Such errors are especially frequent for regular lattices. To
+	 * increase the algorithms stability, a small tolerance is
+	 * added to the anchor (remember that this has no effect on the
+	 * first node).
+	 */
+	anchor = data.begin()->first.lon_left(tide, 0.0, false)+tolerance;
+
+	/* All nodes with (corrected) lon=0.0 will be shifted to 360.0°
+	 * to keep ordering such that the first node stays first.
+	 * However, the first node also has corrected lon=0.0. Alas,
+	 * we need some other means to mark that node. Do it with
+	 * pointers!
+	 */
+	first_arc = &data.begin()->first;
 	
 	/* Find iterator: */
 	BeachIterator::internal_iterator it = data.lower_bound<double>(d);
+
+//	if (it == data.end()){
+//		std::cout << "FOUND THE END!\n";
+//	}
+
+
+//	double  corrected = (d-anchor < 0) ? d-anchor + 2.0*M_PI : d-anchor;
+//	std::cout << "     anchor:           =" << 180.0/M_PI*anchor << "\n"
+//	          << "     insert position: d=" << 180.0/M_PI*d << "\n"
+//	          << "        -> corrected:  =" << 180.0/M_PI*corrected << "\n"
+//	          << "     lower_bound       =" << 180.0/M_PI*it->first.lon_left(tide, anchor) << "\n"
+//	          << "        -> vec_.lon()  =" << 180.0/M_PI*it->first.vec_.lon() << "\n"
+//	          << "        -> left_.lon() =" << 180.0/M_PI*it->first.left_.lon() << "\n"
+//	          << "        -> id()        =" << it->first.id() << "\n";
+
+//	std::cout << "beach structure:\n[";
+//	for (auto it = data.begin(); it != data.end(); ++it){
+//		std::cout << "(" << it->first.id() << ": border: " << 180.0/M_PI*it->first.lon_left(tide, anchor)
+//		          << ", left.lon=" << 180.0/M_PI*it->first.left_.lon() << ", lon()="
+//		          << 180.0/M_PI*it->first.vec_.lon()
+//		          << "), ";
+//	}
+//	std::cout << "]\n";
+
+
 		
 	/* Construct iterator: */
 	return BeachIterator(this, it, tide);
@@ -423,7 +541,7 @@ void Beach::invalidate_circle_event(BeachIterator& pos)
 
 //----------------------------------------------------------------------
 BeachIterator Beach::erase(BeachIterator& it)
-{	
+{
 	/* Invalidate left neighbour: */
 	--it;
 	it->second.invalidate();
