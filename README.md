@@ -16,6 +16,21 @@ change to the ACOSA directory and type (as root):
 
     pip install .
 
-Note that there are still things left to do, e.g. some unhandled degeneracies that
-currently (hopefully all) purposefully crash the code. So be sure to check the results.
-For randomly distributed node sets, however, things should run smoothly.
+The algorithms should run without errors between N=10^2 and 10^6. Note that while some
+tests have been done without errors, testing of the latest revision most likely has
+not been extensive. Make sure to do some checks agains your results if you plan to use
+the code. Most notably in two cases:
+- The code has not been tested for very small node sets (N\<20)
+- For very big node sets (N >> 10^6), double precision accuracy may become significant.
+  Chances are good, though, that such errors are noted for the triangulation (aka 
+  VDTesselation), as it empirically reacts chaotically to significant rounding errors.
+  Adjusting the tolerance parameter may help in such cases.
+
+Please message me if you encounter any errors.
+
+The Fortune's algorithm used to determine the Delaunay triangulation is implemented
+from:  
+[Xiaoyu Zheng et al.: A Plane Sweep Algorithm for the Voronoi Tesselation of the
+ Sphere,  
+ in: electronic-Liquid Crystal Communications, 2011-12-13]
+(http://www.e-lc.org/docs/2011_12_05_14_35_11)
