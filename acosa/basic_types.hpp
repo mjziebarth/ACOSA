@@ -42,6 +42,8 @@ struct Link {
 
 		bool operator==(const Link& other) const;
 		bool operator!=(const Link& other) const;
+
+		bool operator<(const Link& other) const;
 	
 	size_t i;
 	size_t j;

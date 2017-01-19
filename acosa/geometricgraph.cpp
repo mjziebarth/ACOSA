@@ -35,6 +35,30 @@
 namespace ACOSA {
 
 
+/*************** REFACTOR THIS *************************************/
+
+/* TODO : Remove this section and rewrite the other code, so that
+ * functionality from spherics.cpp is used! */
+static double greatcircle_distance(double sin_dlon, double cos_dlon,
+                                   double sin_lat1, double cos_lat1,
+                                   double sin_lat2, double cos_lat2)
+{
+	/* See Wikipedia or e.g. geopy/distance.py:
+	 * Provide a reference? */
+
+	double a = cos_lat2*sin_dlon;
+	double b = cos_lat1*sin_lat2 - sin_lat1*cos_lat2*cos_dlon;
+
+	return std::atan2(std::sqrt(a*a+b*b),
+	                  sin_lat1*sin_lat2+cos_lat1*cos_lat2*cos_dlon);
+}
+
+
+/*************** /REFACTOR THIS *************************************/
+
+
+
+/* A struct to hold both coordinates and id of a node. */
 struct node_t {
 	size_t id;
 	double lon;
@@ -43,42 +67,6 @@ struct node_t {
 
 
 
-
-/*************** REFACTOR THIS *************************************/
-
-/* TODO : Remove this section and rewrite the other code, so that
- * functionality from spherics.cpp is used! */
-static double greatcircle_distance(double sin_lat_1, double cos_lat_1,
-    double sin_lon_1, double cos_lon_1, double sin_lat_2,
-    double cos_lat_2, double sin_lon_2, double cos_lon_2)
-{
-	/* Dot product of vectors i and j: */
-	double d = sin_lat_1*sin_lat_2 + cos_lat_1*cos_lat_2*(
-	    sin_lon_1*sin_lon_2 + cos_lon_1*cos_lon_2);
-
-	/* Arccos to obtain distance: */
-	if (d >= 1.0){
-		d = 0.0;
-	} else if (d <= -1.0){
-		d = M_PI;
-	} else {
-		d = acos(d);
-	}
-
-	return d;
-}
-
-/* Saving the trigonometric function values of a (lon,lat) pair: */
-struct coord_trigf_t{
-	double sin_lon;
-	double cos_lon;
-	double sin_lat;
-	double cos_lat;
-};
-
-
-/*************** REFACTOR THIS *************************************/
-
 static void geometric_graph_links_pairwise(
     const std::vector<node_t>::const_iterator& begin,
     const std::vector<node_t>::const_iterator& end,
@@ -86,14 +74,13 @@ static void geometric_graph_links_pairwise(
     double sigma_0)
 {
 	for (auto it=begin; it!=end; ++it){
-		double slon_1 = std::sin(it->lon);
-		double clon_1 = std::cos(it->lon);
 		double slat_1 = std::sin(it->lat);
 		double clat_1 = std::cos(it->lat);
 		for (auto it2=it+1; it2 != end; ++it2){
-			if (greatcircle_distance(slat_1, clat_1, slon_1, clon_1,
-			        std::sin(it2->lat), std::cos(it2->lat),
-			        std::sin(it2->lon), std::cos(it2->lon))
+			if (greatcircle_distance(std::sin(it->lon-it2->lon),
+			                         std::cos(it->lon-it2->lon),
+			                         slat_1, clat_1, std::sin(it2->lat),
+			                         std::cos(it2->lat))
 			    < sigma_0)
 			{
 				links.push_back({it->id, it2->id});
@@ -101,7 +88,6 @@ static void geometric_graph_links_pairwise(
 			}
 		}
 	}
-
 }
 
 
@@ -122,20 +108,22 @@ void geometric_graph_links(
 	 * to limit the longitude interval in which to search). */
 	constexpr double sigma_limit = std::min(M_PI_2, 17.0/180.0 * M_PI);
 	if (N <= 100 || sigma_0 > sigma_limit){
+		struct coord_trigf_t{
+			double sin_lat;
+			double cos_lat;
+		};
 		std::vector<coord_trigf_t> vec(N);
 		for (size_t i=0; i<N; ++i){
-			vec[i].sin_lon = std::sin(coordinates[i].lon);
-			vec[i].cos_lon = std::cos(coordinates[i].lon);
 			vec[i].sin_lat = std::sin(coordinates[i].lat);
 			vec[i].cos_lat = std::cos(coordinates[i].lat);
 		}
 
 		for (size_t i=0; i<N; ++i){
 			for (size_t j=i+1; j<N; ++j){
-				if (greatcircle_distance(vec[i].sin_lat, vec[i].cos_lat,
-				        vec[i].sin_lon, vec[i].cos_lon,
-				        vec[j].sin_lat, vec[j].cos_lat, vec[j].sin_lon,
-				        vec[j].cos_lon)
+				double dlon = coordinates[i].lon - coordinates[j].lon;
+				if (greatcircle_distance(std::sin(dlon), std::cos(dlon),
+				                         vec[i].sin_lat, vec[i].cos_lat,
+				                         vec[j].sin_lat, vec[j].cos_lat)
 				    < sigma_0)
 				{
 					links.push_back({i, j});
@@ -150,7 +138,6 @@ void geometric_graph_links(
 
 	/* We order the nodes by increasing latitude, so we need to keep
 	 * track of their indices: */
-
 	auto cmp_lat = [](const node_t& l, const node_t& r)->bool
 	    {
 		    return l.lat < r.lat;
@@ -177,7 +164,7 @@ void geometric_graph_links(
 
 	std::set<node_t*, decltype(cmp_lon)> belt(cmp_lon);
 
-	std::queue<decltype(belt)::iterator> leave_events;
+	std::queue<std::set<node_t*, decltype(cmp_lon)>::iterator> leave_events;
 
 
 	/* Step 1: Interconnect all nodes inside the southpole's sigma_0
@@ -196,8 +183,8 @@ void geometric_graph_links(
 
 	/* Step 2: Use belt for most of the other nodes: */
 	std::vector<node_t>::iterator arctic_begin = nodes.end();
-	bool arctic_entered = false;
 	const double sin_s0 = std::sin(sigma_0);
+
 	while (enter != nodes.end()){
 		if (leave_events.empty() ||
 		    enter->lat <= (*leave_events.front())->lat+sigma_0)
@@ -217,28 +204,30 @@ void geometric_graph_links(
 			 * Using spherical rectangular triangle formula, we arrive
 			 * at the following equation: */
 			double delta_lon = std::asin(sin_s0 / std::cos(enter->lat));
+			if (std::isnan(delta_lon)){
+				/* May be triggered if nodes directly at the (or possibly close
+				 * enough to the) north pole: */
+				delta_lon = M_PI;
+			}
 			double lon_left  = enter->lon - delta_lon;
 			double lon_right = enter->lon + delta_lon;
 
 
-
 			/* Because sigma_0 < pi/2 and all events in this iteration
 			 * have latitude bigger than sigma_0, we can be sure that
-			 * the longitude bounds do not overlap. */
+			 * the longitude bounds do not overlap (except for nodes in
+			 * north pole's sigma_0 circle). */
 
 
 
 			/* Find insertion position: */
 			auto insert_pos = belt.lower_bound(&*enter);
-			auto left_bound = insert_pos;
 
 			/* Search the belt for all nodes we have to link the new
 			 * node to: */
 			if (!belt.empty()){
 				/* Now iterate to left and right from insertion position,
 				 * checking all nodes inside the longitude bounds: */
-				double slon_1 = std::sin(enter->lon);
-				double clon_1 = std::cos(enter->lon);
 				double slat_1 = std::sin(enter->lat);
 				double clat_1 = std::cos(enter->lat);
 
@@ -251,12 +240,12 @@ void geometric_graph_links(
 					 * then continue as usual: */
 					while (it != belt.begin()){
 						--it;
-						if (greatcircle_distance(slat_1, clat_1, slon_1,
-						        clon_1,
+						if (greatcircle_distance(
+						        std::sin(enter->lon-(*it)->lon),
+						        std::cos(enter->lon-(*it)->lon),
+						        slat_1, clat_1,
 						        std::sin((*it)->lat),
-						        std::cos((*it)->lat),
-						        std::sin((*it)->lon),
-						        std::cos((*it)->lon))
+						        std::cos((*it)->lat))
 						    < sigma_0)
 						{
 							links.push_back({(*it)->id, enter->id});
@@ -269,15 +258,16 @@ void geometric_graph_links(
 					 * be decremented before being dereferenced, we have
 					 * to set it to end: */
 					it = belt.end();
-					lon_left += M_2_PI;
+					lon_left += 2.0*M_PI;
 				}
 				/* Iterate until we reach the longitude border: */
 				while (it != belt.begin() && (*(--it))->lon >= lon_left)
 				{
-					if (greatcircle_distance(slat_1, clat_1, slon_1,
-					        clon_1,
-					        std::sin((*it)->lat), std::cos((*it)->lat),
-					        std::sin((*it)->lon), std::cos((*it)->lon))
+					if (greatcircle_distance(std::sin(enter->lon-(*it)->lon),
+					                         std::cos(enter->lon-(*it)->lon),
+					                         slat_1, clat_1,
+					                         std::sin((*it)->lat),
+					                         std::cos((*it)->lat))
 					    < sigma_0)
 					{
 						links.push_back({(*it)->id, enter->id});
@@ -290,18 +280,18 @@ void geometric_graph_links(
 				 * In this iteration, we also handle insert_pos. */
 				it = insert_pos;
 
-				if (lon_right > M_2_PI){
+				if (lon_right > 2.0*M_PI){
 					/* The right longitude border wraps around the
 					 * longitude periodic border. We can thus iterate
 					 * over all nodes up to that border, wrap around and
 					 * then continue as usual: */
 					while (it != belt.end()){
-						if (greatcircle_distance(slat_1, clat_1, slon_1,
-						        clon_1,
+						if (greatcircle_distance(
+						        std::sin(enter->lon-(*it)->lon),
+						        std::cos(enter->lon-(*it)->lon),
+						        slat_1, clat_1,
 						        std::sin((*it)->lat),
-						        std::cos((*it)->lat),
-						        std::sin((*it)->lon),
-						        std::cos((*it)->lon))
+						        std::cos((*it)->lat))
 						    < sigma_0)
 						{
 							links.push_back({(*it)->id, enter->id});
@@ -310,15 +300,17 @@ void geometric_graph_links(
 						++it;
 					}
 					it = belt.begin();
-					lon_right -= M_2_PI;
+					lon_right -= 2.0*M_PI;
 
 				}
+
 				/* Iterate until we reach the longitude border: */
 				while (it != belt.end() && (*it)->lon <= lon_right){
-					if (greatcircle_distance(slat_1, clat_1, slon_1,
-					        clon_1,
-					        std::sin((*it)->lat), std::cos((*it)->lat),
-					        std::sin((*it)->lon), std::cos((*it)->lon))
+					if (greatcircle_distance(std::sin(enter->lon-(*it)->lon),
+					                         std::cos(enter->lon-(*it)->lon),
+					                         slat_1, clat_1,
+					                         std::sin((*it)->lat),
+					                         std::cos((*it)->lat))
 					    < sigma_0)
 					{
 						links.push_back({(*it)->id, enter->id});
@@ -349,18 +341,19 @@ void geometric_graph_links(
 	}
 
 
+
 	/* Step 3: Connect the remaining nodes of the belt to all its
 	 *         remaining neighbours: */
 	for (const node_t* node : belt){
-		double slon_1 = std::sin(node->lon);
-		double clon_1 = std::cos(node->lon);
 		double slat_1 = std::sin(node->lat);
 		double clat_1 = std::cos(node->lat);
 
 		for (auto it = arctic_begin; it != nodes.end(); ++it){
-			if (greatcircle_distance(slat_1, clat_1, slon_1, clon_1,
-			        std::sin(it->lat), std::cos(it->lat),
-			        std::sin(it->lon), std::cos(it->lon))
+			if (greatcircle_distance(std::sin(node->lon-it->lon),
+			                         std::cos(node->lon-it->lon),
+			                         slat_1, clat_1,
+			                         std::sin(it->lat),
+			                         std::cos(it->lat))
 			    < sigma_0)
 			{
 				links.push_back({it->id, node->id});

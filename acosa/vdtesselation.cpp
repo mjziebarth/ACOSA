@@ -1,4 +1,4 @@
-/* ACOSA class computing the Voronoi tesselation and Delaunay
+﻿/* ACOSA class computing the Voronoi tesselation and Delaunay
  * triangulation of a set of nodes on a sphere, using the Fortune's
  * variant in [1].
  * Copyright (C) 2016 Malte Ziebarth
@@ -117,6 +117,9 @@ VDTesselation::VDTesselation(const std::vector<Node>& nodes,
 		                              tolerance);
 	} else if (algorithm == BRUTE_FORCE) {
 		/* Do a brute force algorithm: */
+		std::cout << "WARNING :\nBRUTE_FORCE algorithm is probably broken "
+		             "on lattices that have more than three nodes on a "
+		             "circumcircle (e.g. regular lattices).\n";
 		delaunay_triangulation_brute_force(nodes, delaunay_triangles,
 		                                   tolerance);
 	}
@@ -234,14 +237,72 @@ void VDTesselation::calculate_delaunay_links() const
 //----------------------------------------------------------------------
 void VDTesselation::merge_clusters() const
 {
+	const size_t M = delaunay_triangles.size();
+
 	/* First, an injective map: */
-	delaunay2voronoi.resize(delaunay_triangles.size());
-	for (size_t i=0; i<delaunay_triangles.size(); ++i){
+	delaunay2voronoi.resize(M);
+	for (size_t i=0; i<M; ++i){
 		delaunay2voronoi[i] = i;
 	}
 
 	/* Now determine clustered Voronoi nodes (that actually belong to
 	 * the same node): */
+
+	std::vector<Link> cluster_links;
+	geometric_graph_links(voronoi_nodes, cluster_links, tolerance);
+
+	/* Sort the links: */
+	std::sort<std::vector<Link>::iterator>(cluster_links.begin(),
+	                                       cluster_links.end());
+
+
+	/* Now merge clusters. To do this, we iterate over all links
+	 * and set both nodes of each links to the same index (using
+	 * the smaller index).
+	 * Also adjust indices to fill the gaps in the index set. */
+	size_t i_dest = 0;
+	std::vector<bool> adjusted(M, false);
+	std::vector<Node> merged_voronoi_nodes;
+	size_t i_src=0;
+	for (const Link& l : cluster_links){
+		/* All links are given twice, once (i,j) and once (j,i).
+		 * Process only the link where the first index is the smaller
+		 * one: */
+		if (l.i > l.j)
+			continue;
+
+		/* Iterate till we're at position l.i.
+		 * Meanwhile, copy all */
+		for (;i_src<l.i; ++i_src){
+			if (!adjusted[i_src]){
+				delaunay2voronoi[i_src] = i_dest++;
+				merged_voronoi_nodes.push_back(voronoi_nodes[i_src]);
+			}
+		}
+
+		/* Now proceed depending on whether the index has already
+		 * been processed (that is the case if i<j): */
+		if (!adjusted[i_src]){
+			delaunay2voronoi[i_src] = i_dest++;
+			merged_voronoi_nodes.push_back(voronoi_nodes[i_src]);
+			adjusted[i_src] = true;
+		}
+		delaunay2voronoi[l.j] = delaunay2voronoi[i_src];
+		adjusted[l.j] = true;
+
+	}
+
+	/* Adjust the remainder: */
+	for (;i_src<M; ++i_src){
+		if (!adjusted[i_src]){
+			delaunay2voronoi[i_src] = i_dest++;
+			merged_voronoi_nodes.push_back(voronoi_nodes[i_src]);
+		}
+	}
+
+	/* Copy reduced Voronoi vector: */
+	voronoi_nodes = merged_voronoi_nodes;
+
 }
 
 
@@ -256,16 +317,13 @@ void VDTesselation::calculate_voronoi_nodes() const
 	/* Voronoi nodes are at the circumcenter of the three nodes of the
 	 * Delaunay triangles: */
 	voronoi_nodes.reserve(delaunay_triangles.size());
-//	std::cout << "voronoi nodes:\n[";
 	for (const Triangle& t : delaunay_triangles){
 		SphereVector vec = SphereVector::circumcenter(
 						SphereVector(nodes[t.i].lon, nodes[t.i].lat),
 						SphereVector(nodes[t.j].lon, nodes[t.j].lat),
 						SphereVector(nodes[t.k].lon, nodes[t.k].lat));
 		voronoi_nodes.emplace_back(vec.lon(), vec.lat());
-//		std::cout << "  [" << 180.0/M_PI*vec.lon() << "," << 180.0/M_PI*vec.lat() << "],\n";
 	}
-//	std::cout << "]\n";
 
 	/* Merge clusters if needed: */
 	merge_clusters();
@@ -349,12 +407,15 @@ void VDTesselation::calculate_voronoi_network() const
 		 * cell of two nodes, we will end up with each link being duplicate.*/
 		double area = 0.0;
 		size_t last_i = path[0];
-		SphereVectorEuclid last_vec(voronoi_nodes[last_i]);
+		SphereVectorEuclid last_vec(voronoi_nodes[delaunay2voronoi[last_i]]);
 		SphereVectorEuclid v_i(nodes[i]);
 		for (size_t j=1; j<path.size(); ++j){
 			size_t next_i = path[j];
 			size_t l1 = delaunay2voronoi[next_i];
 			size_t l2 = delaunay2voronoi[last_i];
+			/* Because each Voronoi cell is a closed path with a fixed rotation,
+			 * the following check should remove any duplicate points from the
+			 * path (because they would be successive nodes). */
 			if (l1 != l2){
 				if (l1 < l2){
 					voronoi_links.emplace_back(l1, l2);
@@ -392,45 +453,16 @@ void VDTesselation::calculate_voronoi_network() const
 	path.clear();
 
 	/* Finally, we have to sort the Voronoi links... */
-	auto cmp = [&](const Link& l, const Link& r)->bool
-	    {
-		    if (l.i != r.i){
-				return l.i < r.i;
-			}
-			return l.j < r.j;
-	    };
-
-	std::sort<std::vector<Link>::iterator, decltype(cmp)>
-	        (voronoi_links.begin(), voronoi_links.end(), cmp);
+	std::sort<std::vector<Link>::iterator>
+	        (voronoi_links.begin(), voronoi_links.end());
 
 
 	/* ... and remove duplicates! */
 	for (size_t i=1; i<voronoi_links.size()/2; ++i){
-		if (voronoi_links[2*i] != voronoi_links[2*i+1]){
-			std::cerr << "ERROR : NO DUPLICATES! (2*i=" << 2*i
-			          << " -> (" << voronoi_links[2*i].i << ","
-			          << voronoi_links[2*i].j << "), ("
-			          << voronoi_links[2*i+1].i << ","
-			          << voronoi_links[2*i+1].j << ")\n\n[";
-			for (size_t i=0; i<voronoi_links.size(); ++i){
-				std::cerr << "(" << voronoi_links[i].i << ","
-				          << voronoi_links[i].j << "), ";
-			}
-			std::cerr << "]\n";
-			std::cerr << "TRIANGULATION:\n[\n";
-			for (size_t i=0; i<delaunay_triangles.size(); ++i){
-				Triangle t = delaunay_triangles[i];
-				std::cout << "   " << i << ": [" << t.i << "," << t.j << "," << t.k << "] "
-				          << " (" << voronoi_nodes[i].lon << "," << voronoi_nodes[i].lat << "),\n";
-			}
-			std::cout << "]\n";
-			throw 0;
-		}
 		voronoi_links[i] = voronoi_links[2*i];
 	}
 
 	voronoi_links.resize(voronoi_links.size()/2);
-
 
 	/* Cache state: */
 	cache_state |= (VORONOI_LINKS_CACHED | VORONOI_CELLS_CACHED);
@@ -557,8 +589,9 @@ void VDTesselation::print_debug(bool sort_triangles) const
 				std::cout << "\n  ";
 			}
 
-			std::cout << " [" << 180.0/M_PI*voronoi_nodes[index_map[i]].lon << ","
-			          << 180.0/M_PI*voronoi_nodes[index_map[i]].lat << "]";
+			std::cout << " [" << 180.0/M_PI*voronoi_nodes[index_map[i]].lon
+			          << ","  << 180.0/M_PI*voronoi_nodes[index_map[i]].lat
+			          << "]";
 			if (i != M-1){
 				std::cout << ",";
 			}

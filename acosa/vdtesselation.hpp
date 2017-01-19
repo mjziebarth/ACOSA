@@ -57,6 +57,10 @@ class VDTesselation {
 			 *         Its complexity is O(N^4).
 			 *         Though not useful for practical purposes, it
 			 *         can be used for debugging / testint purposes.
+			 *
+			 * Note that this algorithm is untested and most likely broken for
+			 * lattices that have more than 3 nodes on any circumcircle (e.g.
+			 * regular lattices).
 			 */
 			BRUTE_FORCE
 		};

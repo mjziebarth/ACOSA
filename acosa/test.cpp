@@ -26,6 +26,7 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <list>
+#include <chrono>
 
 
 const size_t N = 1000000;
@@ -288,7 +289,13 @@ int main(int argc, char **argv){
 		
 		/* Create tesselation: */
 		std::cout << "Create tesselation.\n";
+		auto t1 = std::chrono::high_resolution_clock::now();
 		ACOSA::VDTesselation tesselation(nodes);
+		auto t2 = std::chrono::high_resolution_clock::now();
+		std::cout << "  --> elapsed: "
+		          << std::chrono::duration_cast<std::chrono::seconds>(t2 - t1)
+		             .count()
+		          << "s\n";
 		if (c.scaled_dbg_output){
 			tesselation.print_debug(false);
 		}
@@ -297,25 +304,13 @@ int main(int argc, char **argv){
 		std::cout << "Obtain Voronoi network.\n";
 		std::vector<ACOSA::Node> voronoi_nodes;
 		std::vector<ACOSA::Link> voronoi_links;
-		try {
-			tesselation.voronoi_tesselation(voronoi_nodes, voronoi_links);
-			std::cerr << "\n\nWE GOOOD!\n\n\n\n\n\n";
-		} catch (int excpt){
-			std::cerr << "EXCEPTION!\n\n\n\n\n\n";
-
-			return 0;
-//			tesselation.print_debug();
-
-			std::cout << "\n\n--- Alternative tesselation: ---\n";
-			ACOSA::VDTesselation tess2(nodes, 1e-8,
-			                           ACOSA::VDTesselation::BRUTE_FORCE);
-			try {
-				tess2.voronoi_tesselation(voronoi_nodes, voronoi_links);
-			} catch (int except) {
-			}
-
-			tess2.print_debug(false);
-		}
+		t1 = std::chrono::high_resolution_clock::now();
+		tesselation.voronoi_tesselation(voronoi_nodes, voronoi_links);
+		t2 = std::chrono::high_resolution_clock::now();
+		std::cout << "  --> elapsed: "
+		          << std::chrono::duration_cast<std::chrono::seconds>(t2 - t1)
+		             .count()
+		          << "s\n";
 
 		voronoi_nodes.clear();
 		voronoi_links.clear();
