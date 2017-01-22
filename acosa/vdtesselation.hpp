@@ -75,10 +75,22 @@ class VDTesselation {
 		/*!
 		 * \brief Constructs a Vorono-Delaunay-tesselation object from
 		 *        a set of nodes.
-		 * \param nodes Set of input nodes of length N.
-		 * 
+		 * \param nodes Set of input nodes of length N. May not contain
+		 *              duplicates within tolerance. Otherwise, an
+		 *              std::domain_error is thrown.
+		 * \param tolerance A tolerance to account for numerical errors
+		 *                  when calculating the geometric points. This
+		 *                  parameter is crucial especially for regular
+		 *                  grids, where rounding error may lead to
+		 *                  chaotic behaviour of the Fortune's algorithm
+		 *                  if tolerance is too low.
+		 *                  Random node sets are, empirically more
+		 *                  resistant to lower tolerance
+		 *
 		 * This method executes the O(N*log(N)) sweepline algorithm
 		 * from [1].
+		 *
+		 * If errors are detected, an std::runtime_error is thrown.
 		 */
 		VDTesselation(const std::vector<Node>& nodes,
 		              double tolerance = 1e-8,

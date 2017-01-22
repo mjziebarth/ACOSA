@@ -40,10 +40,17 @@ namespace ACOSA {
 /*!
  * \brief Calculates the Delaunay triangulation of a set of nodes on
  *        a sphere.
- * \param nodes Vector of node coordinates.
+ * \param nodes Vector of node coordinates. Should not contain any
+ *              duplicates (within tolerance). Otherwise, an
+ *              std::domain_error is thrown.
  * \param delaunay_triangles Output vector of Delaunay triangles.
  * \param tolerance A tolerance to account for numerical errors when
- *                  calculating the geometric points.
+ *                  calculating the geometric points. This parameter
+ *                  is crucial especially for regular grids, where
+ *                  rounding error may lead to chaotic behaviour
+ *                  if tolerance is too low.
+ *                  Random node sets are, empirically more resistant
+ *                  to lower tolerance
  * 
  * The code is an implementation of the plane sweep Voronoi algorithm
  * described in [1]. It has complexity O(N*log(N)).
