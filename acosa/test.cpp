@@ -485,7 +485,7 @@ int main(int argc, char **argv){
 		ACOSA::Node inside = ACOSA::Node(2*M_PI*generator(engine),
 										 M_PI*(0.5-generator(engine)));
 		ACOSA::ConvexHull hull(nodes, inside);
-		std::cout << "hull size = " << hull.size();
+		std::cout << "hull size = " << hull.size() << "\n";
 	
 	}
 		
