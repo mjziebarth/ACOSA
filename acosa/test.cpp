@@ -22,6 +22,9 @@
 #include <random>
 #include <math.h>
 #include <iostream>
+#include <fstream>
+#include <streambuf>
+#include <sstream>
 #include <limits>
 #include <unistd.h>
 #include <cstdlib>
@@ -56,6 +59,7 @@ struct configuration {
 	size_t r;
 	bool r_selected;
 	bool    scaled_dbg_output;
+	std::string testfile;
 };
 
 
@@ -66,12 +70,13 @@ static configuration get_config(int argc, char **argv){
 	char *Rvalue = nullptr;
 	char *rvalue = nullptr;
 	char *gridtype = nullptr;
+	char *file = nullptr;
 	int index;
 	int c;
 
 	opterr = 0;
 
-	while ((c = getopt (argc, argv, "R:ON:r:G:D")) != -1){
+	while ((c = getopt (argc, argv, "R:ON:r:G:Df:")) != -1){
 		switch (c)
 		{
 			case 'r':
@@ -99,6 +104,12 @@ static configuration get_config(int argc, char **argv){
 				Nvalue = optarg;
 				std::cout << "Nvalue: '" << Nvalue << "'\n";
 				break;
+			case 'f':
+				file = optarg;
+				std::cout << "Using test data file '" << file << "'\n";
+				conf.testfile = std::string(file);
+				conf.runs = 1;
+				break;
 			case '?':
 				if (optopt == 'c')
 					std::cerr << "Option -" << optopt
@@ -109,7 +120,7 @@ static configuration get_config(int argc, char **argv){
 					std::cerr << "Unknown option character '"
 							  << (char)optopt  << "'\n";
 			default:
-				return {0, false};
+				return {0,  1, false, false, 0, 0, false, false};
 		}
 	}
 	if (Nvalue){
@@ -174,6 +185,11 @@ void test_order_parameter(size_t N) {
 }
 
 
+/*!
+ * \brief longitude_grid_points
+ * \param N
+ * \return
+ */
 size_t longitude_grid_points(size_t N)
 {
 	/* Start a guess such that guess*(guess/2) = N */
@@ -185,11 +201,136 @@ size_t longitude_grid_points(size_t N)
 	}
 
 	if (!guess){
-		std::cerr << "ERROR : N does not have any factors smaller than sqrt(N/2)!\n";
+		std::cerr << "ERROR : N does not have any factors smaller than "
+		             "sqrt(N/2)!\n";
 		exit(-1);
 	}
 
 	return guess;
+}
+
+
+/*!
+ * \brief Read a number of comma seperated double values from a character
+ *        stream.
+ * \param stream The character stream. Should contain only comma seperated
+ *               floating point values. No error checking is executed.
+ *               Everything between commas is directly passed to std::stod.
+ * \param vec Target vector that will be filled.
+ */
+static void read_double_vector(std::ifstream& stream, std::vector<double>& vec)
+{
+	char c;
+	/* Skip white spaces: */
+	while (!stream.eof() && (c = stream.get()) != '-' &&
+	       (c < '0' || c > '9'))
+	{
+		if (c == '}'){
+			std::cerr << "ERROR : Empty vector braces initialization given in "
+			             "data file. Aborting!\n";
+			exit(-1);
+		}
+	}
+	/* Read whole braced block: */
+	std::stringstream sstream;
+	stream.get(*sstream.rdbuf(), '}');
+	std::string numbers(sstream.str());
+	size_t pos = 0;
+	while (pos < numbers.size())
+	{
+		/* Find next comma: */
+		size_t next_pos = numbers.find(',', pos);
+
+		/* Convert substring to number: */
+		if (next_pos == std::string::npos){
+			vec.push_back(std::stod(numbers.substr(pos, std::string::npos)));
+			break;
+		} else {
+			vec.push_back(std::stod(numbers.substr(pos, next_pos-pos)));
+		}
+
+		/* Continue beyond comma: */
+		pos = next_pos+1;
+	}
+
+}
+
+/*!
+ * \brief Reads a data file containing a list of each latitude and longitude
+ *        coordinates.
+ * \param filename A path to the file.
+ * \return A vector of nodes: (lon,lat)-pairs.
+ *
+ * The file should contain two lists of comma seperated floating point values
+ * marked by 'lon={' and 'lat={' and each delimited by '}'.
+ *
+ * Everything else is ignored. Only the first occurence of the block begin
+ * keywords are evaluated. Not much processing is done.
+ */
+static std::vector<ACOSA::Node> read_data_file(const std::string& filename)
+{
+	std::ifstream instream;
+	instream.open(filename);
+	if (!instream.good()){
+		std::cerr << "Failed to open file '" << filename << "'. Aborting.\n";
+		exit(-1);
+	}
+	if (instream.eof()){
+		std::cerr << "Empty file '" << filename << "'. Aborting.\n";
+		exit(-1);
+	}
+
+	char tag[5] = {0, 0, 0, 0, 0};
+	bool has_lon = false;
+	bool has_lat = false;
+
+	std::vector<double> lon;
+	std::vector<double> lat;
+
+	while ((!has_lon || !has_lat) && !instream.eof())
+	{
+		/* Read one char: */
+		while (!instream.eof() && instream.get() != 'l')
+		{
+		}
+
+		/* Read 5 chars: */
+		instream.get(tag, 5);
+
+		if (tag[0] == 'a' && tag[1] == 't' && tag[2] == '=' && tag[3] == '{'){
+			/* Read latitutde: */
+			read_double_vector(instream, lat);
+			has_lat = true;
+		}
+		else if (tag[0] == 'o' && tag[1] == 'n' && tag[2] == '=' &&
+		         tag[3] == '{')
+		{
+			/* Read longitutde: */
+			read_double_vector(instream, lon);
+			has_lon = true;
+		}
+	}
+
+	/* Sanity checks: */
+	if (!has_lon || !has_lat)
+	{
+		std::cerr << "ERROR : At least one of keywords \"lat={\" or \"lon={\" "
+		             "not found! Aborting.\n";
+		exit(-1);
+	}
+	if (lon.size() != lat.size()){
+		std::cerr << "ERROR : Longitude and latitude vectors are not equally "
+		            "sized in data file! Aborting.\n";
+		exit(-1);
+	}
+
+	/* Now fill return vector: */
+	std::vector<ACOSA::Node> vec(lon.size());
+	for (size_t i=0; i<lon.size(); ++i){
+		vec[i] = ACOSA::Node(M_PI/180.0*lon[i], M_PI/180.0*lat[i]);
+	}
+
+	return vec;
 }
 
 
@@ -228,8 +369,10 @@ int main(int argc, char **argv){
 	/* Parse command line argument: */
 	configuration c = get_config(argc, argv);
 	
+    #ifdef ACOSA_HIST
 	ACOSA::OrderParameter::hist.clear();
-	
+    #endif
+
 	if (c.test_order_param){
 		test_order_parameter(c.N);
 		return 0;
@@ -237,7 +380,7 @@ int main(int argc, char **argv){
 	
 	
 	size_t N = c.N;
-	if (!N){
+	if (!N && c.testfile.empty()){
 		std::cerr << "N==0, returning!\n";
 		return -1;
 	}
@@ -255,7 +398,12 @@ int main(int argc, char **argv){
 
 		/* Create node positions:: */
 		std::vector<ACOSA::Node> nodes(N);
-		if (c.regular_grid){
+
+		if (!c.testfile.empty()){
+			std::cout << "Using grid in file '" << c.testfile << "'.\n";
+			nodes = read_data_file(c.testfile);
+			N = nodes.size();
+		} else if (c.regular_grid){
 			/* Create regular grid: */
 			size_t n_lon = longitude_grid_points(N);
 			size_t n_lat = N/n_lon;
@@ -337,17 +485,19 @@ int main(int argc, char **argv){
 		ACOSA::Node inside = ACOSA::Node(2*M_PI*generator(engine),
 										 M_PI*(0.5-generator(engine)));
 		ACOSA::ConvexHull hull(nodes, inside);
+		std::cout << "hull size = " << hull.size();
 	
 	}
 		
 	/* Informative output: */
+    #ifdef ACOSA_HIST
 	std::cout << "Histogram of OrderParameter lengths:\n";
 	for (size_t i=0; i<ACOSA::OrderParameter::hist.size(); ++i){
 		std::cout << "\t[ " << i << ": " << ACOSA::OrderParameter::hist[i] 
 				  << " ]\n";
 	}
 	std::cout << "\n";
-	
+    #endif
 	
 	std::cout << "Finished.\n";
 	return 0;

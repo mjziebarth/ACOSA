@@ -117,60 +117,69 @@ ConvexHull::ConvexHull(const std::vector<Node>& nodes,
 	hull.push_back(point_queue.top());
 	point_queue.pop();
 	while (!point_queue.empty() && point_queue.top().lon == 0.0){
+		hull.push_back(point_queue.top());
 		point_queue.pop();
 	}
 	if (point_queue.empty()){
-		std::cerr << "Unhandled degeneracy. All nodes in line and thus "
-		             "part of the convex hull.\n";
-		throw 0;
-	}
-	hull.push_back(point_queue.top());
-	point_queue.pop();
-	
-	/* Now we iterate through the queue. For each element a, we check
-	 * the convexity requirement for the nodes {i, i+1, a}, where
-	 * i and i+1 are the last elements on the hull stack.
-	 * If they are not convex, successively remove the hull stack's
-	 * last element until the condition is fulfilled. */
-	while (!point_queue.empty()){
-		internal_node node = point_queue.top();
-		point_queue.pop();
-		
-		if (node.lon == hull.back().lon){
-			/* If the longitudes are equal, only the southest node
-			 * remains: */
-			if (node.vec * z < hull.back().vec * z){
-				/* The hull's last node was rejected.
-				 * We can still reject further nodes. */
-				hull.pop_back();
-			} else{
-				/* The new node was rejected. Continue: */
-				continue;
-			}	
+		/* Degeneracy: All nodes are in a straight line of same longitude.
+		 * Thus, the convex hull consists of the two extreme nodes in latitude
+		 * direction. */
+		if (hull.size() > 1){
+			hull[1] = hull.back();
+			hull.resize(2);
 		}
-		
-		/* Now remove all nodes from the hull that are not convex
-		 * anymore: */
+	} else {
+		if (hull.size() > 1){
+			hull.resize(1);
+		}
+		hull.push_back(point_queue.top());
+		point_queue.pop();
+
+		/* Now we iterate through the queue. For each element a, we check
+		 * the convexity requirement for the nodes {i, i+1, a}, where
+		 * i and i+1 are the last elements on the hull stack.
+		 * If they are not convex, successively remove the hull stack's
+		 * last element until the condition is fulfilled. */
+		while (!point_queue.empty()){
+			internal_node node = point_queue.top();
+			point_queue.pop();
+
+			if (node.lon == hull.back().lon){
+				/* If the longitudes are equal, only the southest node
+				 * remains: */
+				if (node.vec * z < hull.back().vec * z){
+					/* The hull's last node was rejected.
+					 * We can still reject further nodes. */
+					hull.pop_back();
+				} else{
+					/* The new node was rejected. Continue: */
+					continue;
+				}
+			}
+
+			/* Now remove all nodes from the hull that are not convex
+			 * anymore: */
+			while (hull.size() > 1 &&
+			       !is_convex((hull.end()-2)->vec, hull.back().vec,
+			                  node.vec, hull.back().lon, x0, y0))
+			{
+				hull.pop_back();
+			}
+
+			/* Add new node: */
+			hull.push_back(node);
+
+		}
+
+		/* Finally, act like we would add the first node again to ensure
+		 * periodicity: */
 		while (hull.size() > 1 &&
 		       !is_convex((hull.end()-2)->vec, hull.back().vec,
-		                  node.vec, hull.back().lon, x0, y0))
+		                  SphereVectorEuclid(nodes[furthest_id]),
+		                  hull.back().lon, x0, y0))
 		{
 			hull.pop_back();
 		}
-		
-		/* Add new node: */
-		hull.push_back(node);
-		
-	}
-	
-	/* Finally, act like we would add the first node again to ensure
-	 * periodicity: */
-	while (hull.size() > 1 && 
-	       !is_convex((hull.end()-2)->vec, hull.back().vec,
-	                  SphereVectorEuclid(nodes[furthest_id]),
-	                  hull.back().lon, x0, y0))
-	{
-		hull.pop_back();
 	}
 	
 	/* Now, hull contains the ordered set of the convex hull. */

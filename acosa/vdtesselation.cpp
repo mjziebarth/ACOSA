@@ -371,6 +371,7 @@ void VDTesselation::calculate_voronoi_network() const
 		size_t id;
 		Triangle t;
 	};
+
 	std::vector<helper_t> local_triangles;
 	for (size_t i=0; i<nodes.size(); ++i){
 		/* Create a local copy of the set of triangles belonging to node
@@ -429,6 +430,7 @@ void VDTesselation::calculate_voronoi_network() const
 			}
 			last_i = next_i;
 		}
+
 		if (delaunay2voronoi[last_i] != delaunay2voronoi[path[0]]){
 			size_t l1 = delaunay2voronoi[path[0]];
 			size_t l2 = delaunay2voronoi[last_i];

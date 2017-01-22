@@ -8,7 +8,9 @@
 
 using ACOSA::OrderParameter;
 
+#ifdef ACOSA_HIST
 std::vector<unsigned long long> OrderParameter::hist;
+#endif
 
 
 OrderParameter OrderParameter::max() {
@@ -72,10 +74,10 @@ OrderParameter OrderParameter::between_sub2(const OrderParameter& op1,
 	unsigned long l1, l2;
 	if (i >= op1_md_size && i >= op2_md_size){
 		/* Both numbers were equal to the maximum number of digits! */
-		std::cerr << "two identical operators!\n\t"
-				  << op1.to_string() << "\n\t"
-				  << op2.to_string() << "\n";
-		throw 0;
+		std::string str("two identical operators!\n\t");
+		str.append(op1.to_string()).append("\n\t").append(op2.to_string())
+		   .append("\n");
+		throw std::runtime_error(str);
 	}
 	
 	/* Obtain the digits i and i+1 as a single unsigned long for op1: */
@@ -206,81 +208,12 @@ bool is_between(const OrderParameter& m, const OrderParameter& b1,
 	} else if (b2 < b1){
 		return b2 < m && m < b1;
 	} else {
-		std::cerr << "ERROR : is_between(): b1 == b2\n";
-		throw 0;
+		throw std::runtime_error("ERROR : is_between(): b1 == b2\n");
 	}
 }
 
 
 //----------------------------------------------------------------------
-//OrderParameter OrderParameter::mean(const OrderParameter& other) const
-//{
-//	OrderParameter p;
-//	if (other.first_digits > first_digits){
-//		unsigned long delta = other.first_digits - first_digits;
-//		if (delta > 1){
-//			/* Easy case. Just use the first digits: */
-//			p.first_digits = first_digits + delta/2;
-//		} else {
-//			/* Harder case. Search index of digit where we can still fit
-//			 * another number: */
-//			p = OrderParameter::mean_sub1(*this);
-//			
-//			/* Debugging checks: */
-//			#ifdef ACOSA_DEBUG
-//			if (!is_between(p, *this, other)){
-//				std::cerr << "OrderParameter::mean_sub1  failed  1\n";
-//				throw 0;
-//			}
-//			#endif
-//		}
-//	} else if (other.first_digits < first_digits){
-//		unsigned long delta = first_digits - other.first_digits;
-//		if (delta > 1){
-//			/* Easy case. Just use the first digits: */
-//			p.first_digits = other.first_digits + delta/2;
-//		} else {
-//			/* Harder case. Search index of digit where we can still fit
-//			 * another number: */
-//			p = OrderParameter::mean_sub1(other);
-//			
-//			/* Debugging checks: */
-//			#ifdef ACOSA_DEBUG
-//			if (!is_between(p, *this, other)){
-//				std::cerr << "OrderParameter::mean_sub1  failed  2\n";
-//				throw 0;
-//			}
-//			#endif
-//		}
-//	} else {
-//		/* Calculate the mean for two order parameters that are equal
-//		 * in the first digits: */
-//		p = OrderParameter::mean_sub2(*this, other);
-//		
-//		/* Debugging checks: */
-//		#ifdef ACOSA_DEBUG
-//		if (!is_between(p, *this, other)){
-//			std::cerr.flush();
-//			std::cerr << "OrderParameter::mean_sub2  failed\n";
-//			p = OrderParameter::mean_sub2(*this, other, true);
-//			std::cerr << "p: " << p.to_string() << "\n"
-//					  << "l: " << this->to_string() << "\n"
-//					  << "r: " << other.to_string() << "\n";
-//			throw 0;
-//		}
-//		#endif
-//	}
-//	
-//	#ifdef ACOSA_HIST
-//	if (p.more_digits.size() >= hist.size()){
-//		hist.resize(p.more_digits.size()+1, 0);
-//	}
-//	++hist[p.more_digits.size()];
-//	#endif
-//	
-//	return p;
-//}
-
 OrderParameter OrderParameter::between(const OrderParameter& o1,
 	const OrderParameter& o2)
 {

@@ -31,7 +31,9 @@ namespace ACOSA {
  */
 class OrderParameter {
 	public:
+        #ifdef ACOSA_HIST
 		static std::vector<unsigned long long> hist;
+        #endif
 	
 		static OrderParameter max();
 		static OrderParameter min();

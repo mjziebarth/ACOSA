@@ -28,6 +28,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <stdexcept>
 #include <limits>
 
 namespace ACOSA {
@@ -373,10 +374,11 @@ BeachIterator Beach::find_insert_position(double d, double tide,
 {
 	/* A check if tide increases (or at least behaves monotonely): */
 	if (check_increasing_tide && tide < this->tide){
-		std::cerr << "ERROR : Beach::find_insert_position() :\n"
-			"Received decreasing tide!\nOld tide: " << this->tide
-			<< "\nNew tide: " << tide << "\n";
-		throw;
+		std::string str("ERROR : Beach::find_insert_position() :\n"
+		    "Received decreasing tide!\nOld tide: ");
+		str.append(std::to_string(this->tide)).append("\nNew tide: ")
+		   .append(std::to_string(tide)).append("\n");
+		throw std::runtime_error(str);
 	}
 
 	/* Adjust compare: */
@@ -474,11 +476,11 @@ BeachIterator Beach::insert_before(const BeachIterator& pos, size_t id,
 			p = OrderParameter::between(l.pos, OrderParameter::max());
 		}
 	} else {
-		std::cerr << "ERROR : Beach::insert_before() :\nTwo positions "
-			"equal!\n";
-		std::cerr << "\tleft = " << l.pos.to_string() << "\n"
-		             "\tright= " << r.pos.to_string() << "\n";
-		throw;
+		std::string str("ERROR : Beach::insert_before() :\nTwo positions "
+		    "equal!\n\tleft = ");
+		str.append(l.pos.to_string()).append("\n\tright= ")
+		   .append(r.pos.to_string()).append("\n");
+		throw std::runtime_error(str);
 	}
 	ArcIntersect m(p, id, vec, l.vec_);
 	

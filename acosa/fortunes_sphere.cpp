@@ -27,6 +27,7 @@
 #include <spherics.hpp>
 #include <beach.hpp>
 #include <circleevent.hpp>
+#include <geometricgraph.hpp>
 
 
 #include <queue>
@@ -34,6 +35,7 @@
 #include <algorithm>
 
 #include <iostream>
+#include <stdexcept>
 
 #include <limits>
 
@@ -142,12 +144,34 @@ static inline Beach init_beach(site_queue_t& site_events,
 	}
 }
 
+//----------------------------------------------------------------------
+static void ensure_no_cloned_nodes(const std::vector<Node>& nodes,
+                                   double tolerance)
+{
+	std::vector<Link> links;
+	geometric_graph_links(nodes, links, tolerance);
+
+	if (!links.empty()){
+		std::string message("ERROR : delaunay_triangulation_sphere() :\n"
+		                    "Found ");
+		message.append(std::to_string(links.size()))
+		       .append(" node pairs that are equal within tolerance.\n");
+		throw std::domain_error(message);
+	}
+
+}
+
 
 //----------------------------------------------------------------------
 void delaunay_triangulation_sphere(const std::vector<Node>& nodes,
     std::vector<Triangle>& delaunay_triangles, double tolerance)
 {
 	const size_t N = nodes.size();
+
+	/* 0) Sanity check: Make sure that no two nodes are within tolerance of
+	 *                  each other: */
+	ensure_no_cloned_nodes(nodes, tolerance);
+
 	
 	/* 1) Priority queue of site events. */
 	/*    Site event comparison lambda: */
@@ -168,7 +192,6 @@ void delaunay_triangulation_sphere(const std::vector<Node>& nodes,
 	for (size_t i=0; i<N; ++i){
 		site_events.emplace(nodes[i].lon, nodes[i].lat, i);
 	}
-	
 	
 	/* 2) Priority queue of circle events: */
 	eventqueue_t circle_events;

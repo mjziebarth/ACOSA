@@ -18,6 +18,8 @@
 
 #include <basic_types.hpp>
 #include <iostream>
+#include <stdexcept>
+#include <math.h>
 
 namespace ACOSA {
 
@@ -26,11 +28,13 @@ namespace ACOSA {
 Triangle::Triangle(size_t i, size_t j, size_t k)
 	: i(i), j(j), k(k)
 {
-	if (i==j || i==k || j==k){
-		std::cerr << "Created a Delaunay triangle with two equal "
-			"borders!\n\ti=" << i << "\n\tj=" << j << "\n\tk=" << k
-			<< "\n";
-		throw 0;
+	if (i==j || i==k || j==k)
+	{
+		std::string str("Created a Delaunay triangle with two equal "
+		    "borders!\n\ti=");
+		str.append(std::to_string(i)).append("\n\tj=").append(std::to_string(j))
+		   .append("\n\tk=").append(std::to_string(k)).append("\n");
+		throw std::runtime_error(str);
 	}
 }
 
@@ -85,6 +89,12 @@ bool Link::operator<(const Link& other) const
 
 Node::Node(double lon, double lat) : lon(lon), lat(lat)
 {
+	if (lon > 2.0*M_PI || lon < 0 || lat > M_PI_2 || lat < -M_PI_2)
+	{
+		throw std::domain_error("ERROR : ACOSA::Node() :\nlon or lat out of"
+		                        "bounds. Expected ranges are [0, 2pi] for "
+		                        "longitude and [-pi/2, pi/2] for latitude.\n");
+	}
 }
 
 Node::Node() : lon(0), lat(0)
