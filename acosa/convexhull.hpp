@@ -38,7 +38,8 @@ class ConvexHull {
 		 * 'inside' is used to sort the nodes for Graham's scan.
 		 * Complexity of algorithm is O(N*log(N)).
 		 */
-		ConvexHull(const std::vector<Node>& nodes, const Node& inside);
+		ConvexHull(const std::vector<Node>& nodes, const Node& inside,
+		           double tolerance = 1e-12);
 		
 		std::vector<size_t>::const_iterator begin() const;
 		
@@ -47,15 +48,31 @@ class ConvexHull {
 		size_t size() const;
 		
 		bool is_contained(const Node& node) const;
+
+		/*!
+		 * \brief For each node, calculate the shortest distance to the hull's
+		 *        border.
+		 * \param nodes Vector of nodes to calculate distances to border.
+		 * \param distances Target vector of distances. Order equals the order
+		 *                  of nodes passed to the constructor.
+		 *
+		 * Complexity is O(N*M) where N is the number of nodes in the set and
+		 * M the number of segments of the hull.
+		 */
+		void distance_to_border(const std::vector<Node>& nodes,
+		                        std::vector<double>& distances) const;
 	
 	private:
 		/* The indices of the nodes that form the convex hull: */
 		std::vector<size_t> hull_node_ids;
 		
 		/* Normal vectors onto the great circle planes that form
-		 * the hull segments.
-		 * They are not necessarily normalized. */
+		 * the hull segments. */
 		std::vector<SphereVectorEuclid>   hull_segment_normals;
+
+		/* A tolerance parameter for determining whether a node is inside
+		 * the hull: */
+		double tolerance;
 };
 
 } // NAMESPACE ACOSA

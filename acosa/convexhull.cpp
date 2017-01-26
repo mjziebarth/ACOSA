@@ -21,6 +21,7 @@
 #include <queue>
 #include <math.h>
 #include <iostream>
+#include <stdexcept>
 
 namespace ACOSA {
 
@@ -43,7 +44,8 @@ static bool is_convex(const SphereVectorEuclid& l,
 
 
 ConvexHull::ConvexHull(const std::vector<Node>& nodes,
-                       const Node& inside)
+                       const Node& inside, double tolerance)
+    : tolerance(tolerance)
 {
 	/* This uses Graham's scan (-like algorithm?). */
 	
@@ -68,7 +70,7 @@ ConvexHull::ConvexHull(const std::vector<Node>& nodes,
 	
 	/* First, we look for the node that is furthest away from inside: */
 	SphereVectorEuclid z(inside);
-	double furthest_dot_product = SphereVectorEuclid(nodes[0]) * z;
+	double furthest_dot_product = points[0].vec * z;
 	size_t furthest_id = 0;
 	for (size_t i=1; i<N; ++i){
 		double dotp = points[i].vec * z;
@@ -193,7 +195,10 @@ ConvexHull::ConvexHull(const std::vector<Node>& nodes,
 		/* Usually not normalized normal vectors to plane defined by
 		 * the great circle through points v1 and v2.
 		 * Its positive direction points to the inside. */
-		hull_segment_normals[i] = v2.cross(v1-v2); 
+		hull_segment_normals[i] = v2.cross(v1-v2);
+
+		/* Norm: */
+		hull_segment_normals[i] *= 1.0/hull_segment_normals[i].norm();
 	}
 }
 
@@ -219,10 +224,49 @@ bool ConvexHull::is_contained(const Node& node) const
 {
 	SphereVectorEuclid vec(node);
 	for (const SphereVectorEuclid& segment : hull_segment_normals){
-		if (segment * vec < 0.0)
+		if (segment * vec < -tolerance)
 			return false;
 	}
 	return true;
+}
+
+void ConvexHull::distance_to_border(const std::vector<Node>& nodes,
+                                    std::vector<double>& distances) const
+{
+	/* Sanity check: */
+	if (hull_segment_normals.empty()){
+		distances.resize(nodes.size(), 0.0);
+		return;
+	}
+
+	const size_t N = nodes.size();
+	distances.resize(N);
+
+	for (size_t i=0; i<N; ++i){
+		SphereVectorEuclid vec(nodes[i]);
+
+		/* Iterate over all border segments and find the one with smallest
+		 * distance: */
+		double closest_dotp = std::abs(hull_segment_normals.front() * vec);
+		for (size_t j=1; j<hull_segment_normals.size(); ++j){
+			double dotp = vec*hull_segment_normals[j];
+			if (dotp < -tolerance){
+				throw std::domain_error("ConvexHull::distance_to_border():\ņ"
+				                        "Node not inside hull.\n");
+			} else if (std::abs(dotp) < closest_dotp){
+				closest_dotp = std::abs(dotp);
+			}
+		}
+
+		/* Convert that dot product to a distance.
+		 * Since hull_segment_normals are normed to 1.0, their dot product
+		 * with vec equals the z coordinate of vec in a coordinate system
+		 * with z axis parallel to the respective segment normal vector.
+		 * We can set x=sqrt(1-z^2) and the resulting vector's latitude will
+		 * be vecs distance to the closest hull segment. */
+		distances[i] = SphereVectorEuclid(std::sqrt(closest_dotp), 0.0,
+		                                  closest_dotp).lat();
+	}
 }
 
 } // NAMESPACE ACOSA

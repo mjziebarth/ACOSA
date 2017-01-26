@@ -78,6 +78,9 @@ cdef extern from "convexhull.hpp" namespace "ACOSA":
 		size_t size() const
 		
 		bool is_contained(const Node& node) const
+		
+		void distance_to_border(const vector[Node]& nodes,\
+                                vector[double]& distances) const
 
 
 
@@ -327,3 +330,52 @@ cdef class PyConvexHull:
 			contained[i] = dereference(self.hull).is_contained(Node(lon[i],lat[i]))
 		
 		return contained
+	
+	# Calculate distances to border of convex hull:
+	def distance_to_border(self, np.ndarray[float, ndim=1] lon,
+	                       np.ndarray[float, ndim=1] lat
+	    ):
+	    
+		"""
+		Calculates the distance of nodes inside this convex hull to the
+		hull's borders.
+		
+		Raises exception if given any of the given coordinates are outside the hull.
+		"""
+		
+		# Sanity checks:
+		cdef size_t N
+		N = len(lon)
+	
+		if (len(lat) != N):
+			raise Exception("PyConvexHull.distance_to_border() :\nLength of longitude "
+				"and latitude arrays not equal!")
+		
+		if not self.hull:
+			raise Exception("PyConvexHull.distance_to_border() :\nNo hull object was "
+				"allocated!")
+		
+		# Create node vector:
+		cdef vector[Node] nodes
+		cdef double d2r = np.pi/180.0
+		cdef size_t i
+		nodes.resize(N)
+		for i in range(N):
+			nodes[i].lon = d2r*lon[i]
+			nodes[i].lat = d2r*lat[i]
+		
+		# Calculate distance:
+		cdef vector[double] dist_vec
+		try:
+			dereference(self.hull).distance_to_border(nodes, dist_vec)
+		except:
+			raise Exception("ConvexHull empty!")
+		
+		
+		# Copy to numpy array:
+		cdef np.ndarray[double, ndim=1] distance = np.zeros(N, dtype=float)
+		for i in range(N):
+			distance[i] = dist_vec[i]
+		
+		return distance
+		
