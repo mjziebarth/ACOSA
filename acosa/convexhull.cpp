@@ -28,7 +28,7 @@ namespace ACOSA {
 static bool is_convex(const SphereVectorEuclid& l,
 	const SphereVectorEuclid& m, const SphereVectorEuclid& r,
 	double lon, const SphereVectorEuclid& x0,
-	const SphereVectorEuclid& y0)
+    const SphereVectorEuclid& y0, double tolerance)
 {
 	/* Calculate the normal vector to the plane that corresponds to the
 	 * great circle defined by the segment {l,r}.
@@ -39,7 +39,7 @@ static bool is_convex(const SphereVectorEuclid& l,
 	 * m lies outside of the hypothetical hull if {l,r} were part of
 	 * it. If the dot product is zero, it lies on the hull.
 	 * In both cases, the segment {l,m,r} is part of the convex hull. */
-	return m * r.cross(l-r) <= 0.0;
+	return m * r.cross(l-r) <= tolerance;
 }
 
 
@@ -163,7 +163,7 @@ ConvexHull::ConvexHull(const std::vector<Node>& nodes,
 			 * anymore: */
 			while (hull.size() > 1 &&
 			       !is_convex((hull.end()-2)->vec, hull.back().vec,
-			                  node.vec, hull.back().lon, x0, y0))
+			                  node.vec, hull.back().lon, x0, y0, tolerance))
 			{
 				hull.pop_back();
 			}
@@ -178,7 +178,7 @@ ConvexHull::ConvexHull(const std::vector<Node>& nodes,
 		while (hull.size() > 1 &&
 		       !is_convex((hull.end()-2)->vec, hull.back().vec,
 		                  SphereVectorEuclid(nodes[furthest_id]),
-		                  hull.back().lon, x0, y0))
+		                  hull.back().lon, x0, y0, tolerance))
 		{
 			hull.pop_back();
 		}
