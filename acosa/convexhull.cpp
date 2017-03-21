@@ -44,7 +44,8 @@ static bool is_convex(const SphereVectorEuclid& l,
 
 
 ConvexHull::ConvexHull(const std::vector<Node>& nodes,
-                       const Node& inside, double tolerance)
+                       const Node& inside, double tolerance,
+                       bool sanity_check)
     : tolerance(tolerance)
 {
 	/* This uses Graham's scan (-like algorithm?). */
@@ -199,6 +200,15 @@ ConvexHull::ConvexHull(const std::vector<Node>& nodes,
 
 		/* Norm: */
 		hull_segment_normals[i] *= 1.0/hull_segment_normals[i].norm();
+	}
+
+	/* Sanity check: Throw if not all nodes contained. */
+	if (sanity_check){
+		for (const Node& n: nodes){
+			if (!is_contained(n))
+				throw std::runtime_error("Convex hull failed: Not all"
+			                             "nodes contained.\n");
+		}
 	}
 }
 

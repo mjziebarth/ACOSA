@@ -29,6 +29,7 @@
 #define ACOSA_VDTESSELATION_H
 
 #include <vector>
+#include <forward_list>
 #include <basic_types.hpp>
 
 namespace ACOSA {
@@ -169,6 +170,12 @@ class VDTesselation {
 		 * to the same Voronoi nodes (which is the case if more than
 		 * 3 nodes of the original network lie on a circle). */
 		mutable std::vector<size_t>   delaunay2voronoi;
+
+		/* Also because of the cluster merge, there may be more than one
+		 * Delaunay triangle associated with a Voronoi node.
+		 * This is a map that stores the Delaunay triangles that contribute
+		 * to a Voronoi node. */
+		mutable std::vector<std::forward_list<size_t>> voronoi2delaunay;
 		
 		/* Cached variables: */
 		mutable unsigned char cache_state;

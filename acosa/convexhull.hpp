@@ -34,12 +34,16 @@ class ConvexHull {
 		 * \param inside A vector pointing to the inside of the set.
 		 *        The point furthest away from this vector needs to be
 		 *        outside the convex hull.
+		 * \param sanity_check If true, it is checked whether all nodes are
+		 *        contained in the convex hull within tolerance using
+		 *        is_contained. If one or more nodes are not contained, a
+		 *        std::runtime_error is thrown.
 		 * 
 		 * 'inside' is used to sort the nodes for Graham's scan.
 		 * Complexity of algorithm is O(N*log(N)).
 		 */
 		ConvexHull(const std::vector<Node>& nodes, const Node& inside,
-		           double tolerance = 1e-12);
+		           double tolerance = 1e-12, bool sanity_check=true);
 		
 		std::vector<size_t>::const_iterator begin() const;
 		

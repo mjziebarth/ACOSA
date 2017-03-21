@@ -31,7 +31,6 @@
 
 #include <map>
 #include <set>
-#include <forward_list>
 #include <iostream>
 #include <math.h>
 #include <algorithm>
@@ -105,7 +104,7 @@ delaunay_triangulation_brute_force(const std::vector<Node>& nodes,
 
 
 
-//----------------------------------------------------------------------
+//------------------------------------------------------------------------------
 VDTesselation::VDTesselation(const std::vector<Node>& nodes,
                              double tolerance,
                              delaunay_algorithm_t algorithm)
@@ -125,14 +124,14 @@ VDTesselation::VDTesselation(const std::vector<Node>& nodes,
 	}
 }
 
-//----------------------------------------------------------------------
+//------------------------------------------------------------------------------
 size_t VDTesselation::size() const
 {
 	return delaunay_triangles.size();
 }
 
 
-//----------------------------------------------------------------------
+//-----------------------------------------------------------------------------
 void VDTesselation::delaunay_triangulation(std::vector<Link>& links)
 	const
 {
@@ -144,7 +143,7 @@ void VDTesselation::delaunay_triangulation(std::vector<Link>& links)
 }
 
 
-//----------------------------------------------------------------------
+//------------------------------------------------------------------------------
 void VDTesselation::voronoi_tesselation(std::vector<Node>& nodes,
 	std::vector<Link>& links) const
 {
@@ -157,7 +156,7 @@ void VDTesselation::voronoi_tesselation(std::vector<Node>& nodes,
 }
 
 
-//----------------------------------------------------------------------
+//------------------------------------------------------------------------------
 void VDTesselation::voronoi_cell_areas(std::vector<double>& areas) const
 {
 	/* Make sure Voronoi areas are cached: */
@@ -203,7 +202,7 @@ struct link_t {
 
 
 
-//----------------------------------------------------------------------
+//------------------------------------------------------------------------------
 void VDTesselation::calculate_delaunay_links() const
 {
 	/* Check if we've previously calculated the Delaunay links: */
@@ -234,7 +233,7 @@ void VDTesselation::calculate_delaunay_links() const
 
 
 
-//----------------------------------------------------------------------
+//------------------------------------------------------------------------------
 void VDTesselation::merge_clusters() const
 {
 	const size_t M = delaunay_triangles.size();
@@ -303,11 +302,18 @@ void VDTesselation::merge_clusters() const
 	/* Copy reduced Voronoi vector: */
 	voronoi_nodes = merged_voronoi_nodes;
 
+	/* Create an inverse map mapping Voronoi nodes to all contributing
+	 * Delaunay triangles (needed for associated nodes): */
+	voronoi2delaunay.resize(voronoi_nodes.size());
+	for (size_t i=0; i<M; ++i){
+		voronoi2delaunay[delaunay2voronoi[i]].push_front(i);
+	}
 }
 
 
 
 
+//------------------------------------------------------------------------------
 void VDTesselation::calculate_voronoi_nodes() const
 {
 	/* Check if we've previously calculated the Voronoi nodes: */
@@ -334,7 +340,7 @@ void VDTesselation::calculate_voronoi_nodes() const
 }
 
 
-//----------------------------------------------------------------------
+//------------------------------------------------------------------------------
 void VDTesselation::calculate_voronoi_network() const
 {
 	/* Check if we've previously calculated the Voronoi network: */
@@ -471,7 +477,7 @@ void VDTesselation::calculate_voronoi_network() const
 	tidy_up_cache();
 }
 
-//----------------------------------------------------------------------
+//------------------------------------------------------------------------------
 void VDTesselation::calculate_voronoi_cell_areas() const
 {
 	/* Check if we've previously calculated the Voronoi cells: */
@@ -484,7 +490,7 @@ void VDTesselation::calculate_voronoi_cell_areas() const
 }
 
 
-//----------------------------------------------------------------------
+//------------------------------------------------------------------------------
 void VDTesselation::associated_nodes(
 	const std::vector<size_t>& voronoi_nodes,
 	std::vector<size_t>& associated) const
@@ -495,9 +501,11 @@ void VDTesselation::associated_nodes(
 	std::vector<bool> marked(N, false);
 	
 	for (size_t node : voronoi_nodes){
-		marked[delaunay_triangles[node].i] = true;
-		marked[delaunay_triangles[node].j] = true;
-		marked[delaunay_triangles[node].k] = true;
+		for (size_t triangle : voronoi2delaunay[node]){
+			marked[delaunay_triangles[triangle].i] = true;
+			marked[delaunay_triangles[triangle].j] = true;
+			marked[delaunay_triangles[triangle].k] = true;
+		}
 	}
 	
 	size_t count = 0;
@@ -514,7 +522,7 @@ void VDTesselation::associated_nodes(
 	}
 }
 
-//----------------------------------------------------------------------
+//------------------------------------------------------------------------------
 void VDTesselation::tidy_up_cache() const
 {
 	/* Check if nodes still need to be stored: */
@@ -525,7 +533,7 @@ void VDTesselation::tidy_up_cache() const
 	}
 }
 
-//----------------------------------------------------------------------
+//------------------------------------------------------------------------------
 void VDTesselation::print_debug(bool sort_triangles) const
 {
 	/* First print Delaunay tesselation: */
