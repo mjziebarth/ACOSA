@@ -20,6 +20,9 @@
  *     Tesselation of the Sphere, in: electronic-Liquid Crystal
  *     Communications, 2011-12-13
  *     http://www.e-lc.org/docs/2011_12_05_14_35_11
+ * [2] T. Vincenty, Direct and Inverse Solutions of Geodesics on the Ellipsoid
+ *     with Application of Nested Equations, Survey Review 23 (176),
+ *     (Directorate of Overseas Survey, Kingston Road, Tolworth, Surrey 1975)
  */
 
 #include <spherics.hpp>
@@ -63,6 +66,12 @@ double SphereVector::lat() const
 //------------------------------------------------------------------------------
 double SphereVector::distance(const SphereVector& other) const
 {
+	/* This uses the arctan version of the great-circle distance function
+	 * from en.wikipedia.org/wiki/Great-circle_distance for increased
+	 * numerical stability.
+	 * Formula can be obtained from [2] combining eqns. (14)-(16)
+	 * for spherical geometry (f=0).
+	 */
 	double dlon = other.lon_-lon_;
 	double cd = std::cos(dlon);
 	double clat2 = std::cos(other.lat_);

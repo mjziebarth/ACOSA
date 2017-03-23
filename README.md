@@ -2,17 +2,19 @@
 A compilation of spherical algorithms.
 
 This code collection contains C++ classes to calculate the Voronoi-tesselation
-and Delaunay-triangulation (**VDTesselation**), and the convex hull (**ConvexHull**)
-of a set of nodes on a sphere. The algorithms used to calculate the tesselation
-and the convex hull are O(N\*log(N)).
+and Delaunay-triangulation (**VDTesselation**), the convex hull (**ConvexHull**),
+and the negative alpha spectrum and alpha shapes (**AlphaSpectrum**) of a set of
+nodes on a sphere. The algorithms used to calculate the tesselation and the
+convex hull are O(N\*log(N)), alpha spectra and shapes work on the such
+generated data and take additional O(N) time.
 
 The geometricgraph.hpp header contains an algorithm for the determination of links of a geometric
 graph, a spatially embedded network with links between all pairs of nodes closer than
 a threshold. The algorithm's complexity is O(N\*log(N) + M\*N + M^2) where N is the
 number of nodes and M the mean degree of the resulting graph.
 
-Additionally, it can be used in Python using the Cython module. To install it,
-change to the ACOSA directory and type (as root):
+Additionally, it can be used in Python using the Cython module **acosa**.
+To install it, change to the ACOSA directory and type (as root):
 
     pip install .
 
@@ -34,3 +36,8 @@ from:
  Sphere,  
  in: electronic-Liquid Crystal Communications, 2011-12-13]
 (http://www.e-lc.org/docs/2011_12_05_14_35_11)
+
+The alpha sphere and shape algorithms are implemented from:  
+[Herbert Edelsbrunner et al.: On the Shape of a Set of Points in the
+ Plane,  
+ in: IEEE Transactions on Information Theory, Vol. 29, No. 4, July 1983]
