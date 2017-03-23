@@ -45,7 +45,7 @@ static bool is_convex(const SphereVectorEuclid& l,
 
 ConvexHull::ConvexHull(const std::vector<Node>& nodes,
                        const Node& inside, double tolerance,
-                       bool sanity_check)
+                       bool sanity_check, bool throw_on_fail)
     : tolerance(tolerance)
 {
 	/* This uses Graham's scan (-like algorithm?). */
@@ -205,9 +205,18 @@ ConvexHull::ConvexHull(const std::vector<Node>& nodes,
 	/* Sanity check: Throw if not all nodes contained. */
 	if (sanity_check){
 		for (const Node& n: nodes){
-			if (!is_contained(n))
-				throw std::runtime_error("Convex hull failed: Not all"
-			                             "nodes contained.\n");
+			if (!is_contained(n)){
+				if (throw_on_fail){
+					/* Throw if hull could not be constructed: */
+					throw std::runtime_error("Convex hull failed: Not all"
+					                         "nodes contained.\n");
+				} else {
+					/* This is the more silent way: Simply continue with
+					 * empty hull. */
+					hull_node_ids.clear();
+					hull_segment_normals.clear();
+				}
+			}
 		}
 	}
 }
@@ -227,6 +236,11 @@ std::vector<size_t>::const_iterator ConvexHull::end() const
 size_t ConvexHull::size() const
 {
 	return hull_node_ids.size();
+}
+
+bool ConvexHull::empty() const
+{
+	return hull_node_ids.empty();
 }
 
 		
@@ -261,7 +275,7 @@ void ConvexHull::distance_to_border(const std::vector<Node>& nodes,
 		for (size_t j=1; j<hull_segment_normals.size(); ++j){
 			double dotp = vec*hull_segment_normals[j];
 			if (dotp < -tolerance){
-				throw std::domain_error("ConvexHull::distance_to_border():\ņ"
+				throw std::domain_error("ConvexHull::distance_to_border():\n"
 				                        "Node not inside hull.\n");
 			} else if (std::abs(dotp) < closest_dotp){
 				closest_dotp = std::abs(dotp);

@@ -38,18 +38,24 @@ class ConvexHull {
 		 *        contained in the convex hull within tolerance using
 		 *        is_contained. If one or more nodes are not contained, a
 		 *        std::runtime_error is thrown.
+		 * \param throw_on_fail If true, will throw a runtime_exception if the
+		 *        hull could not be constructed. Otherwise, will return an
+		 *        empty hull in that case.
 		 * 
 		 * 'inside' is used to sort the nodes for Graham's scan.
 		 * Complexity of algorithm is O(N*log(N)).
 		 */
 		ConvexHull(const std::vector<Node>& nodes, const Node& inside,
-		           double tolerance = 1e-12, bool sanity_check=true);
+		           double tolerance = 1e-12, bool sanity_check=true,
+		           bool throw_on_fail=false);
 		
 		std::vector<size_t>::const_iterator begin() const;
 		
 		std::vector<size_t>::const_iterator end() const;
 		
 		size_t size() const;
+
+		bool empty() const;
 		
 		bool is_contained(const Node& node) const;
 

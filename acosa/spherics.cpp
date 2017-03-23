@@ -60,6 +60,22 @@ double SphereVector::lat() const
 	return lat_;
 }
 
+//------------------------------------------------------------------------------
+double SphereVector::distance(const SphereVector& other) const
+{
+	double dlon = other.lon_-lon_;
+	double cd = std::cos(dlon);
+	double clat2 = std::cos(other.lat_);
+	double clat1 = std::cos(lat_);
+	double slat1 = std::sin(lat_);
+	double slat2 = std::sin(other.lat_);
+	double sum1 = clat2 * std::sin(dlon);
+	double sum2 = clat1*slat2 - slat1*clat2*cd;
+
+	return std::atan2(std::sqrt(sum1*sum1 + sum2*sum2),
+	                  slat1*slat2 + clat1*clat2*cd);
+}
+
 
 //----------------------------------------------------------------------
 SphereVector SphereVector::circumcenter(const SphereVector& v1,
@@ -205,11 +221,25 @@ void SphereVectorEuclid::operator-=(const SphereVectorEuclid& other)
 }
 
 //----------------------------------------------------------------------
+void SphereVectorEuclid::operator+=(const SphereVectorEuclid& other)
+{
+	x += other.x;
+	y += other.y;
+	z += other.z;
+}
+
+//----------------------------------------------------------------------
 void SphereVectorEuclid::operator*=(double d)
 {
 	x *= d;
 	y *= d;
 	z *= d;
+}
+
+//----------------------------------------------------------------------
+void SphereVectorEuclid::operator/=(double d)
+{
+	operator*=(1.0/d);
 }
 
 //----------------------------------------------------------------------

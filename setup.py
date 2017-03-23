@@ -44,7 +44,8 @@ extensions.append(Extension('acosa',
 	         'acosa/spherics.cpp',
 	         'acosa/convexhull.cpp',
 	         'acosa/circleevent.cpp',
-	         'acosa/geometricgraph.cpp'],
+	         'acosa/geometricgraph.cpp',
+	         'acosa/alphaspectrum.cpp'],
 	include_dirs=[np.get_include(),'acosa'],
 	extra_compile_args=['-std=c++14'],
 	working="/home/malte/git/ACOSA",
@@ -59,8 +60,8 @@ setup(
 	version='1.0.0',
 	description="A Compilation of Spherical Algorithms",
 	long_description="Algorithsm to calculate the Voronoi tesselation, \
-	                  Delaunay triangulation, and convex hull of a set of \
-	                  nodes on a sphere.",
+	                  Delaunay triangulation, convex hull , and alpha shape of \
+	                  a set of nodes on a sphere.",
 	author='Malte J. Ziebarth',
 	author_email='contact@fmvkb.de',
 	packages=['acosa'],

@@ -18,6 +18,7 @@
 #include <vdtesselation.hpp>
 #include <convexhull.hpp>
 #include <order_parameter.hpp>
+#include <alphaspectrum.hpp>
 
 #include <random>
 #include <math.h>
@@ -482,10 +483,23 @@ int main(int argc, char **argv){
 		
 		/* Obtain hull: */
 		std::cout << "Obtain hull.\n";
-		ACOSA::Node inside = ACOSA::Node(2*M_PI*generator(engine),
-										 M_PI*(0.5-generator(engine)));
-		ACOSA::ConvexHull hull(nodes, inside);
-		std::cout << "hull size = " << hull.size() << "\n";
+		try {
+			ACOSA::Node inside = ACOSA::Node(2*M_PI*generator(engine),
+			                                 M_PI*(0.5-generator(engine)));
+			ACOSA::ConvexHull hull(nodes, inside);
+			std::cout << "hull size = " << hull.size() << "\n";
+		} catch (std::runtime_error& err){
+			std::cout << "Hull failed:\n" << err.what() << "\n";
+		}
+
+		/* Obtain alpha shape: */
+		std::cout << "Obtain alpha shape.\n";
+		double alpha = -12;
+		ACOSA::AlphaSpectrum spectrum(nodes, tesselation);
+		ACOSA::AlphaShape shape = spectrum(alpha);
+		std::cout << "alpha shape for alpha=" << alpha<< ":\n  - node count: "
+		          << shape.nodes().size() << "\n  - link count: "
+		          << shape.links().size() << "\n";
 	
 	}
 		

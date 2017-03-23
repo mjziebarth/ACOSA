@@ -77,10 +77,33 @@ cdef extern from "convexhull.hpp" namespace "ACOSA":
 		
 		size_t size() const
 		
+		bool empty() const
+		
 		bool is_contained(const Node& node) const
 		
 		void distance_to_border(const vector[Node]& nodes,\
                                 vector[double]& distances) const
+
+# The AlphaSpectrum and AlphaShape classes:
+cdef extern from "alphaspectrum.hpp" namespace "ACOSA":
+	cdef cppclass AlphaShape :
+		AlphaShape()
+		
+		AlphaShape(const vector[size_t]& nodes,
+		           const vector[Link]& links)
+		
+		const vector[size_t]& nodes() const
+		
+		const vector[Link]& links() const
+		
+		vector[Link] source_network_links() const
+	
+	
+	cdef cppclass AlphaSpectrum :
+		AlphaSpectrum(const vector[Node]& nodes,
+		              const VDTesselation& tesselation)
+		
+		AlphaShape operator()(double alpha) const
 
 
 
@@ -231,7 +254,8 @@ cdef class VoronoiDelaunayTesselation:
 		vnodes.clear()
 		
 		# Copy to numpy output:
-		cdef np.ndarray[long, ndim=1] out = np.zeros(associated.size(), dtype=long)
+		cdef np.ndarray[long, ndim=1] out = np.zeros(associated.size(),
+		                                             dtype=long)
 		for i in range(associated.size()):
 			out[i] = associated[i]
 		
@@ -239,7 +263,7 @@ cdef class VoronoiDelaunayTesselation:
 
 
 
-####################################################################################
+################################################################################
 cdef class PyConvexHull:
 	cdef ConvexHull* hull
 	
@@ -348,12 +372,12 @@ cdef class PyConvexHull:
 		N = len(lon)
 	
 		if (len(lat) != N):
-			raise Exception("PyConvexHull.distance_to_border() :\nLength of longitude "
-				"and latitude arrays not equal!")
+			raise Exception("PyConvexHull.distance_to_border() :\nLength of "
+			                "longitude and latitude arrays not equal!")
 		
 		if not self.hull:
-			raise Exception("PyConvexHull.distance_to_border() :\nNo hull object was "
-				"allocated!")
+			raise Exception("PyConvexHull.distance_to_border() :\nNo hull "
+			                "object was allocated!")
 		
 		# Create node vector:
 		cdef vector[Node] nodes
@@ -378,4 +402,148 @@ cdef class PyConvexHull:
 			distance[i] = dist_vec[i]
 		
 		return distance
+
+
+
+################################################################################
+cdef class PyAlphaSpectrum:
+	"""
+	A cython interface to the ACOSA C++ implementation of the AlphaSpectrum
+	class that implements the alpha sphere algorithm in [1] for negative
+	alpha on a spherical topology.
+	
+	It is initialized passing numpy arrays of longitude and latitude coordinates
+	of the point set to calculate the alpha shape of.
+	
+	Afterwards, a linear-time algorithm can be used calling the PyAlphaSpectrum
+	instance on a specific value of alpha to obtain the alpha shape.
+	
+	Implemented methods:
+	
+	__cinit__
+	__dealloc__
+	__call__
+	
+	
+	Example:
+	
+	> lon = 120.0 * np.random.random(200)
+	> lat = 90.0 * np.random.random(200)
+	> alpha = -12.0
+	> spectrum = AlphaSpectrum(lon, lat)
+	> shape = spectrum(alpha)
+	
+	
+	Bibliography:
+	
+	[2] Herbert Edelsbrunner et al.: On the Shape of a Set of Points in the
+	    Plane, in: IEEE Transactions on Information Theory, Vol. 29, No. 4,
+	    July 1983
+	"""
+	cdef AlphaSpectrum* spectrum
+	
+	# Constructor:
+	def __cinit__(self, np.ndarray[float, ndim=1] lon,
+	              np.ndarray[float, ndim=1] lat,
+	              VoronoiDelaunayTesselation vdtesselation=None
+	    ):
 		
+		"""
+		Initialize an AlphaSpectrum.
+		
+		Parameters:
+		:type lon: 1d numpy array (float)
+		:arg  lon: Longitude coordinates of point set.
+		
+		:type lat: 1d numpy array (float)
+		:arg  lat: Latitude coordinates of point set.
+		
+		:type vdtesselation: VoronoiDelaunayTesselation instance or None
+		:arg  vdtesselation: An instance of a Voronoi-Delaunay-tesselation of
+		                     the point set if already calculated. Optional: If
+		                     omitted, the tesselations will be calculated
+		                     internally.
+		"""
+		
+		# Sanity checks:
+		cdef size_t N
+		N = len(lon)
+	
+		if (len(lat) != N):
+			raise Exception("PyAlphaSpectrum() :\nLength of "
+			                "longitude and latitude arrays not equal!")
+		
+		# Create node vector:
+		cdef vector[Node] nodes
+		cdef double d2r = np.pi/180.0
+		cdef size_t i
+		nodes.resize(N)
+		for i in range(N):
+			nodes[i].lon = d2r*lon[i]
+			nodes[i].lat = d2r*lat[i]
+		
+		
+		# If no Voronoi-Delaunay-Tesselation is given, compute it:
+		if vdtesselation is None:
+			vdtesselation = VoronoiDelaunayTesselation(lon, lat)
+		
+		
+		# Calculate Spectrum:
+		cdef VDTesselation* tess = vdtesselation.tesselation
+		if not tess:
+			raise Exception("PyAlphaSpectrum() :\nTesselation not initialized!")
+		
+		self.spectrum = new AlphaSpectrum(nodes,dereference(tess))
+		
+		if not self.spectrum:
+			raise Exception("PyAlphaSpectrum() :\nCould not allocate "
+				"AlphaSpectrum object!")
+	
+	
+	# Destructor:
+	def __dealloc__(self):
+		if self.spectrum:
+			del self.spectrum
+	
+	
+	# Create alpha shape:
+	def __call__(self, float alpha):
+		"""
+		Compute the alpha shape for a specific alpha.
+		
+		:type alpha: float
+		:arg  alpha: Alpha value to calculate the shape for.
+		
+		:return: Tuple (nodes,links) of node indices and links between them that
+		         are alpha-extreme (see [1]).
+		         The indices in nodes refer to the original node set, the
+		         indices in links to nodes.
+		"""
+		# Sanity check:
+		if alpha > 0:
+			raise Exception("PyAlphaSpectrum.__call__() : Only implemented "
+			                "for alpha<0 !")
+		
+		if not self.spectrum:
+			raise Exception("PyAlphaSpectrum.__call__() : Spectrum was not "
+			                "created!")
+		
+		# Create AlphaShape object:
+		cdef AlphaShape shape = dereference(self.spectrum)(alpha)
+		
+		# Obtain vectors from alpha shape:
+		cdef np.ndarray[ndim=1,dtype=long] nodes \
+		    = np.zeros(shape.nodes().size(),dtype=int)
+		cdef np.ndarray[ndim=2,dtype=long] links \
+		    = np.zeros((shape.links().size(),2),dtype=int)
+		
+		cdef size_t i
+		for i in range(shape.nodes().size()):
+			nodes[i] = shape.nodes()[i]
+		
+		for i in range(shape.links().size()):
+			links[i,0] = shape.links()[i].i
+			links[i,1] = shape.links()[i].j
+		
+		# Return numpy arrays:
+		return nodes, links

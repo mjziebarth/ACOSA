@@ -40,6 +40,8 @@ class SphereVector {
 		double lon() const;
 		
 		double lat() const;
+
+		double distance(const SphereVector& other) const;
 		
 		static SphereVector circumcenter(
 			const SphereVector& v1, const SphereVector& v2,
@@ -88,8 +90,12 @@ class SphereVectorEuclid{
 		SphereVectorEuclid& operator*(double d);
 		
 		void operator*=(double d);
+
+		void operator/=(double d);
 		
 		void operator-=(const SphereVectorEuclid& other);
+
+		void operator+=(const SphereVectorEuclid& other);
 		
 		/* Attributes: */
 		double norm() const;

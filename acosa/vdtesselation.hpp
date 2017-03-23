@@ -34,6 +34,8 @@
 
 namespace ACOSA {
 
+class AlphaSpectrum;
+
 /*!
  * \brief A class representing both the Delaunay- and Voronoi-
  *        tesselation on a unit sphere.
@@ -44,6 +46,9 @@ namespace ACOSA {
  * This class is not (yet?) thread safe.
  */
 class VDTesselation {
+
+	friend class AlphaSpectrum;
+
 	public:
 		/*! \brief An enumeration of algorithms available to calculate
 		 *         the Delaunay tesselation.*/

@@ -102,3 +102,37 @@ Node::Node() : lon(0), lat(0)
 }
 
 } // NAMESPACE ACOSA
+
+
+//######################################################################
+
+/*!
+ * \brief Creates a bitmask of alternating 0 and 1.
+ * \param b Determines whether mask stars with 1 (true) or 0 (false) at least
+ *          significant bit.
+ * \return The mask with length of size_t
+ */
+static constexpr size_t alternating_mask(bool b)
+{
+	size_t mask=0;
+	unsigned char maskword= (b) ? 0x55 : 0xAA;
+	for (size_t i=0; i<sizeof(size_t); ++i)
+	{
+		mask = mask | (((size_t)maskword) << i);
+	}
+
+	return mask;
+}
+
+size_t std::hash<ACOSA::Link>::operator()(const ACOSA::Link& link) const
+{
+	/* Create hashs of both links, (hopefully) uniformly distributed along the
+	 * size_t bits:*/
+	size_t h1 = std::hash<size_t>()(link.i);
+	size_t h2 = std::hash<size_t>()(link.j);
+
+	/* Join both by using bits alternately: */
+	constexpr size_t mask1 = alternating_mask(true);
+	constexpr size_t mask2 = alternating_mask(false);
+	return (h1 & mask1) | (h2 & mask2);
+}

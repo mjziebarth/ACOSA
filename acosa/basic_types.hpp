@@ -19,6 +19,7 @@
 #define ACOSA_BASIC_TYPES_HPP
 
 #include <stddef.h>
+#include <functional>
 
 namespace ACOSA {
 
@@ -60,5 +61,14 @@ struct Node {
 };
 
 } // NAMESPACE ACOSA
+
+namespace std
+{
+    template<> struct hash<ACOSA::Link>
+    {
+		size_t operator()(const ACOSA::Link& link) const;
+    };
+}
+
 
 #endif // ACOSA_BASIC_TYPES_HPP
