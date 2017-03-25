@@ -114,6 +114,15 @@ class VDTesselation {
 		 * with the smaller index being the first index.
 		 */
 		void delaunay_triangulation(std::vector<Link>& links) const;
+
+		/*!
+		 * \brief Obtain the set of Delaunay triangles.
+		 * \return Constant reference to vector of Delaunay triangles.
+		 *
+		 * Each triangle contains indices of three nodes of the original set
+		 * of nodes that form a Delaunay triangle.
+		 */
+		const std::vector<Triangle>& delaunay_triangles() const;
 		
 		/*!
 		 * \brief Obtain the set of spatially embedded nodes and their
@@ -167,7 +176,7 @@ class VDTesselation {
 
 		/* This variable holds the initial delaunay triangulation
 		 * in form of a list of triangles. */
-		mutable std::vector<Triangle> delaunay_triangles;
+		mutable std::vector<Triangle> delaunay_triangles_;
 
 		/* A cluster merge might have been done. In that case,
 		 * the map of Delaunay triangles to Voronoi nodes is surjective

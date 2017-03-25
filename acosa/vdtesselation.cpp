@@ -112,14 +112,14 @@ VDTesselation::VDTesselation(const std::vector<Node>& nodes,
 {
 	if (algorithm == FORTUNES){
 		/* Do Fortune's algorithm: */
-		delaunay_triangulation_sphere(nodes, delaunay_triangles,
+		delaunay_triangulation_sphere(nodes, delaunay_triangles_,
 		                              tolerance);
 	} else if (algorithm == BRUTE_FORCE) {
 		/* Do a brute force algorithm: */
 		std::cout << "WARNING :\nBRUTE_FORCE algorithm is probably broken "
 		             "on lattices that have more than three nodes on a "
 		             "circumcircle (e.g. regular lattices).\n";
-		delaunay_triangulation_brute_force(nodes, delaunay_triangles,
+		delaunay_triangulation_brute_force(nodes, delaunay_triangles_,
 		                                   tolerance);
 	}
 }
@@ -127,7 +127,7 @@ VDTesselation::VDTesselation(const std::vector<Node>& nodes,
 //------------------------------------------------------------------------------
 size_t VDTesselation::size() const
 {
-	return delaunay_triangles.size();
+	return delaunay_triangles_.size();
 }
 
 
@@ -140,6 +140,13 @@ void VDTesselation::delaunay_triangulation(std::vector<Link>& links)
 	
 	/* Copy cache: */
 	links = delaunay_links;
+}
+
+//------------------------------------------------------------------------------
+const std::vector<Triangle>& VDTesselation::delaunay_triangles() const
+{
+	/* This is easy. */
+	return delaunay_triangles_;
 }
 
 
@@ -215,7 +222,7 @@ void VDTesselation::calculate_delaunay_links() const
 	 * only one of each pair (i,j) and (j,i)) */
 	std::set<link_t> links;
 	
-	for (const Triangle& t : delaunay_triangles){
+	for (const Triangle& t : delaunay_triangles_){
 		links.insert(link_t(t.i, t.j));
 		links.insert(link_t(t.i, t.k));
 		links.insert(link_t(t.j, t.k));
@@ -236,7 +243,7 @@ void VDTesselation::calculate_delaunay_links() const
 //------------------------------------------------------------------------------
 void VDTesselation::merge_clusters() const
 {
-	const size_t M = delaunay_triangles.size();
+	const size_t M = delaunay_triangles_.size();
 
 	/* First, an injective map: */
 	delaunay2voronoi.resize(M);
@@ -322,8 +329,8 @@ void VDTesselation::calculate_voronoi_nodes() const
 	
 	/* Voronoi nodes are at the circumcenter of the three nodes of the
 	 * Delaunay triangles: */
-	voronoi_nodes.reserve(delaunay_triangles.size());
-	for (const Triangle& t : delaunay_triangles){
+	voronoi_nodes.reserve(delaunay_triangles_.size());
+	for (const Triangle& t : delaunay_triangles_){
 		SphereVector vec = SphereVector::circumcenter(
 						SphereVector(nodes[t.i].lon, nodes[t.i].lat),
 						SphereVector(nodes[t.j].lon, nodes[t.j].lat),
@@ -362,10 +369,10 @@ void VDTesselation::calculate_voronoi_network() const
 	 * a vertex of.
 	 */
 	std::vector<std::forward_list<size_t>> node2triangle(nodes.size());
-	for (size_t i=0; i<delaunay_triangles.size(); ++i){
-		node2triangle[delaunay_triangles[i].i].push_front(i);
-		node2triangle[delaunay_triangles[i].j].push_front(i);
-		node2triangle[delaunay_triangles[i].k].push_front(i);
+	for (size_t i=0; i<delaunay_triangles_.size(); ++i){
+		node2triangle[delaunay_triangles_[i].i].push_front(i);
+		node2triangle[delaunay_triangles_[i].j].push_front(i);
+		node2triangle[delaunay_triangles_[i].k].push_front(i);
 	}
 
 	/* Now we iterate over each node index (of the input network) and
@@ -384,7 +391,7 @@ void VDTesselation::calculate_voronoi_network() const
 		 * i: */
 		local_triangles.resize(0);
 		for (size_t t : node2triangle[i]){
-			local_triangles.push_back({true, t, delaunay_triangles[t]});
+			local_triangles.push_back({true, t, delaunay_triangles_[t]});
 		}
 		node2triangle[i].clear();
 
@@ -502,9 +509,9 @@ void VDTesselation::associated_nodes(
 	
 	for (size_t node : voronoi_nodes){
 		for (size_t triangle : voronoi2delaunay[node]){
-			marked[delaunay_triangles[triangle].i] = true;
-			marked[delaunay_triangles[triangle].j] = true;
-			marked[delaunay_triangles[triangle].k] = true;
+			marked[delaunay_triangles_[triangle].i] = true;
+			marked[delaunay_triangles_[triangle].j] = true;
+			marked[delaunay_triangles_[triangle].k] = true;
 		}
 	}
 	
@@ -541,10 +548,10 @@ void VDTesselation::print_debug(bool sort_triangles) const
 	size_t column = 0;
 
 	/* Order triangles by smallest index first, then by j: */
-	const size_t M = delaunay_triangles.size();
+	const size_t M = delaunay_triangles_.size();
 	std::vector<Triangle> triangles_copy(M);
 	for (size_t i=0; i<M; ++i){
-		Triangle t = delaunay_triangles[i];
+		Triangle t = delaunay_triangles_[i];
 		if (t.k < t.i && t.k < t.j){
 			triangles_copy[i] = Triangle(t.k, t.i, t.j);
 		} else if (t.j < t.i && t.j < t.k){

@@ -157,8 +157,8 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 	 *         should not make a big performance difference in most cases,
 	 *         alas we do not check for duplicates. */
 	std::vector<std::forward_list<size_t>> node2delaunay(N);
-	for (size_t i=0; i<tesselation.delaunay_triangles.size(); ++i){
-		const Triangle& t = tesselation.delaunay_triangles[i];
+	for (size_t i=0; i<tesselation.delaunay_triangles_.size(); ++i){
+		const Triangle& t = tesselation.delaunay_triangles_[i];
 		node2delaunay[t.i].push_front(i);
 		node2delaunay[t.j].push_front(i);
 		node2delaunay[t.k].push_front(i);

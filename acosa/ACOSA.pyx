@@ -55,12 +55,14 @@ cdef extern from "vdtesselation.hpp" namespace "ACOSA":
 		size_t size() const
 		
 		VDTesselation(const vector[Node]& nodes) except +
-	
+		
 		void delaunay_triangulation(vector[Link]& links) const
-	
+		
+		const vector[Triangle]& delaunay_triangles() const
+		
 		void voronoi_tesselation(vector[Node]& voronoi_nodes,
 		                         vector[Link]& voronoi_links) const
-	
+		
 		void voronoi_cell_areas(vector[double]& areas) const
 		
 		void associated_nodes(const vector[size_t]& voronoi_nodes,
@@ -228,6 +230,25 @@ cdef class VoronoiDelaunayTesselation:
 		
 		# Return numpy arrays:
 		return np_links
+	
+	
+	# Delaunay triangles:
+	def delaunay_triangles(self):
+		# Sanity check:
+		if not self.tesselation:
+			raise Exception("VoronoiDelaunayTesselation() :\nVDTesselation "
+				"was not initialized!\n")
+		
+		# Copy triangles to numpy array:
+		cdef size_t N = dereference(self.tesselation).delaunay_triangles().size()
+		cdef np.ndarray[long, ndim=2] triangles = np.zeros((N,3),dtype=long)
+		
+		for i in range(N):
+			triangles[i,0] = dereference(self.tesselation).delaunay_triangles()[i].i
+			triangles[i,1] = dereference(self.tesselation).delaunay_triangles()[i].j
+			triangles[i,2] = dereference(self.tesselation).delaunay_triangles()[i].k
+		
+		return triangles
 	
 	# Nodes of the network associated to a set of Voronoi nodes:
 	def associated_nodes(self, np.ndarray[long, ndim=1] voronoi_nodes):
