@@ -45,6 +45,7 @@ static void calculate_convex_hull_members(const std::vector<ACOSA::Node>& nodes,
 
 	/* Resize vectors first: */
 	is_ch_node.resize(N, false);
+	is_ch_link.resize(M, false);
 
 	/* Calculate convex hull.
 	 * A vector inside the convex hull will be calculated as the node sets
@@ -110,14 +111,23 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 {
 	const size_t N = nodes.size();
 
-	/* Step 1: Calculate the convex hull of the node set: */
+	/* Step 1: Ensure tesselation has all necessary variables cached.
+	 *         Then initialize the vectors now that we're sure we've got the
+	 *         right dimensions: */
+	tesselation.calculate_voronoi_nodes();
+	tesselation.calculate_delaunay_links();
+	tesselation.calculate_dual_links();
+
+
+	/* Step 2: Calculate the convex hull of the node set: */
 	std::vector<bool> is_convex_hull_node;
 	std::vector<bool> is_convex_hull_link;
 	calculate_convex_hull_members(nodes, is_convex_hull_node,
 	                              tesselation.delaunay_links,
 	                              is_convex_hull_link);
 
-	/* Step 2: Create a map from node indices to associated Voronoi cells.
+
+	/* Step 3: Create a map from node indices to associated Voronoi cells.
 	 *         The map may contain duplicates as some Delaunay triangles
 	 *         may have been merged to the same Voronoi node, but that
 	 *         should not make a big performance difference in most cases,
@@ -130,15 +140,10 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 		node2delaunay[t.k].push_front(i);
 	}
 
-	/* Step 3: Ensure tesselation has all necessary variables cached.
-	 *         Then initialize the vectors now that we're sure we've got the
-	 *         right dimensions: */
-	tesselation.calculate_voronoi_nodes();
-	tesselation.calculate_delaunay_links();
-	tesselation.calculate_dual_links();
 
 	alpha_intervals.resize(tesselation.delaunay_links.size());
 	delaunay_links = tesselation.delaunay_links;
+
 
 	/* Step 4: For each node, calculate the maximum alpha where it is
 	 * alpha-extreme (read: part of the alpha-shape): */
@@ -168,6 +173,7 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 
 		}
 	}
+
 
 	/* Step 5: For each link of the Delaunay-tesselation, calculate the alpha
 	 *         bounds inside which it is part of the alpha shape of the point
