@@ -31,6 +31,7 @@
 
 #include <map>
 #include <set>
+#include <unordered_map>
 #include <iostream>
 #include <math.h>
 #include <algorithm>
@@ -42,6 +43,7 @@ static constexpr unsigned char DELAUNAY_LINKS_CACHED = 1;
 static constexpr unsigned char VORONOI_NODES_CACHED =  2;
 static constexpr unsigned char VORONOI_LINKS_CACHED =  4;
 static constexpr unsigned char VORONOI_CELLS_CACHED =  8;
+static constexpr unsigned char DUAL_LINKS_CACHED    = 16;
 
 
 static void
@@ -107,20 +109,59 @@ delaunay_triangulation_brute_force(const std::vector<Node>& nodes,
 //------------------------------------------------------------------------------
 VDTesselation::VDTesselation(const std::vector<Node>& nodes,
                              double tolerance,
-                             delaunay_algorithm_t algorithm)
+                             delaunay_algorithm_t algorithm,
+                             int checks)
     : nodes(nodes), cache_state(0), N(nodes.size()), tolerance(tolerance)
 {
-	if (algorithm == FORTUNES){
-		/* Do Fortune's algorithm: */
-		delaunay_triangulation_sphere(nodes, delaunay_triangles_,
-		                              tolerance);
-	} else if (algorithm == BRUTE_FORCE) {
-		/* Do a brute force algorithm: */
-		std::cout << "WARNING :\nBRUTE_FORCE algorithm is probably broken "
-		             "on lattices that have more than three nodes on a "
-		             "circumcircle (e.g. regular lattices).\n";
-		delaunay_triangulation_brute_force(nodes, delaunay_triangles_,
-		                                   tolerance);
+	try {
+		if (algorithm == FORTUNES){
+			/* Do Fortune's algorithm: */
+			delaunay_triangulation_sphere(nodes, delaunay_triangles_,
+			                              tolerance);
+		} else if (algorithm == BRUTE_FORCE) {
+			/* Do a brute force algorithm: */
+			std::cout << "WARNING :\nBRUTE_FORCE algorithm is probably broken "
+			             "on lattices that have more than three nodes on a "
+			             "circumcircle (e.g. regular lattices).\n";
+			delaunay_triangulation_brute_force(nodes, delaunay_triangles_,
+			                                   tolerance);
+		}
+
+		/* Consistency checks: */
+
+		if (checks & CHECK_DUAL_LINKS){
+			/* If the Delaunay triangulation is inconsistent in a way that not
+			 * for every link a dual link of the Voronoi tesselation can be
+			 * found, this will raise an exception: */
+			calculate_dual_links();
+		}
+
+		if (checks & CHECK_VORONOI_CELL_AREAS){
+			/* Calculate Voronoi areas: */
+			calculate_voronoi_cell_areas();
+
+			/* Add up the cell areas: */
+			double sum = 0.0;
+			for (double d : voronoi_areas){
+				sum += d;
+			}
+
+			/* Throw exception if we're more than one magnitude further away
+			 * from 4pi than tolerance: */
+			if (std::abs(sum - 4*M_PI) > 10.0*tolerance){
+				throw std::runtime_error("Sum of Voronoi areas (" +
+				                         std::to_string(sum) + ") is more than "
+				                         "one magnitude farther than tolerance "
+				                         "away from 4pi!");
+			}
+		}
+	} catch (const std::runtime_error& e){
+		/* Add a little hint to the error message: */
+		throw std::runtime_error("VDTesselation failed:\n\""
+		                         + std::string(e.what()) +
+		                         "\n\nHint: Changing tolerance "
+		                         "or inverting the latitude coordinates may "
+		                         "solve the problems encountered.\n");
 	}
 }
 
@@ -148,7 +189,6 @@ const std::vector<Triangle>& VDTesselation::delaunay_triangles() const
 	/* This is easy. */
 	return delaunay_triangles_;
 }
-
 
 //------------------------------------------------------------------------------
 void VDTesselation::voronoi_tesselation(std::vector<Node>& nodes,
@@ -375,6 +415,8 @@ void VDTesselation::calculate_voronoi_network() const
 		node2triangle[delaunay_triangles_[i].k].push_front(i);
 	}
 
+
+
 	/* Now we iterate over each node index (of the input network) and
 	 * create a closed path, the Voronoi cell: */
 	std::vector<size_t> path;
@@ -494,6 +536,84 @@ void VDTesselation::calculate_voronoi_cell_areas() const
 
 	/* Calculation of Voronoi links makes calculating the weight easy: */
 	calculate_voronoi_network();
+}
+
+//------------------------------------------------------------------------------
+
+void VDTesselation::calculate_dual_links() const
+{
+	/* Early exit if cached: */
+	if (cache_state & DUAL_LINKS_CACHED)
+		return;
+
+	/* Make sure we have calculated the Delaunay links and the Voronoi
+	 * nodes: */
+	calculate_delaunay_links();
+	calculate_voronoi_network();
+
+	/* Create a map mapping all triangles a node is part of by the node's
+	 * index: */
+	std::vector<std::forward_list<size_t>> node2delaunay(N);
+	for (size_t i=0; i<delaunay_triangles_.size(); ++i){
+		const Triangle& t = delaunay_triangles_[i];
+		node2delaunay[t.i].push_front(i);
+		node2delaunay[t.j].push_front(i);
+		node2delaunay[t.k].push_front(i);
+	}
+
+	/* Create a hashtable mapping Voronoi links to their indices in the
+	 * voronoi_links vector: */
+	std::unordered_map<Link,size_t> vlink2id;
+	for (size_t i=0; i<voronoi_links.size(); ++i)
+	{
+		vlink2id.emplace(voronoi_links[i],i);
+	}
+
+	/* Now for each link (l,m) of the Delaunay triangulation find the two
+	 * Delaunay triangles (n,o) which have the edge (l,m).
+	 * (n,o) is the dual edge of (l,m). */
+	dual_link_delaunay2voronoi.resize(delaunay_links.size());
+	for (size_t p=0; p<delaunay_links.size(); ++p)
+	{
+		/* Find the dual link of the Delaunay link: */
+		Link l = dual_link_d2v(delaunay_links[p], node2delaunay);
+
+		/* Now we need to find the link's index in
+		 * voronoi_links: */
+		dual_link_delaunay2voronoi[p] = vlink2id.at(l);
+	}
+
+	/* Update cache state: */
+	cache_state |= DUAL_LINKS_CACHED;
+	tidy_up_cache();
+}
+
+//------------------------------------------------------------------------------
+Link VDTesselation::dual_link_d2v(const Link& link,
+           const std::vector<std::forward_list<size_t> >& node2delaunay) const
+{
+	/* Find the Delaunay triangles which both nodes are part of (should be two):
+	 */
+	size_t tri[2];
+	int k=0;
+	for (size_t i : node2delaunay[link.i]){
+		for (size_t j : node2delaunay[link.j]){
+			if (i == j){
+				tri[k] = i;
+				++k;
+				if (k == 2){
+					/* We found the link. Construct the ordered version: */
+					size_t m = delaunay2voronoi[tri[0]];
+					size_t o = delaunay2voronoi[tri[1]];
+					if (m < o)
+						return Link(m,o);
+					else
+						return Link(o,m);
+				 }
+			}
+		}
+	}
+	throw std::runtime_error("Dual edge not found!");
 }
 
 

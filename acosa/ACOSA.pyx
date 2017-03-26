@@ -54,7 +54,7 @@ cdef extern from "vdtesselation.hpp" namespace "ACOSA":
 		
 		size_t size() const
 		
-		VDTesselation(const vector[Node]& nodes) except +
+		VDTesselation(const vector[Node]& nodes, double tolerance) except +
 		
 		void delaunay_triangulation(vector[Link]& links) const
 		
@@ -121,7 +121,8 @@ cdef class VoronoiDelaunayTesselation:
 	
 	# Constructor:
 	def __cinit__(self, np.ndarray[float, ndim=1] lon,
-	              np.ndarray[float, ndim=1] lat
+	              np.ndarray[float, ndim=1] lat,
+	              double tolerance = 1e-10
 	    ):
 		# Sanity checks:
 		cdef size_t N
@@ -142,7 +143,7 @@ cdef class VoronoiDelaunayTesselation:
 			nodes[i].lat = d2r*lat[i]
 		
 		# Create VDTesselation object:
-		self.tesselation = new VDTesselation(nodes)
+		self.tesselation = new VDTesselation(nodes,tolerance)
 		
 		if not self.tesselation:
 			raise Exception("VoronoiDelaunayTesselation() :\nCould not allocate "

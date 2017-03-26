@@ -72,6 +72,27 @@ class VDTesselation {
 		};
 
 
+		/*!
+		 * \brief Do no consisteny check.
+		 */
+		constexpr static int CHECK_NOTHING = 0;
+
+		/*! \brief Calculate the Voronoi tesselation and check if it's
+		 *         possible to calculate the dual link for each link of the
+		 *         Delaunay tesselation.
+		 *
+		 * Complexity is N*log(N)
+		 */
+		constexpr static int CHECK_DUAL_LINKS = 1;
+
+		    /*! \brief Calculate the Voronoi tesselation and the Voronoi cells'
+			 *         areas, and check if their sum matches up to 4pi within
+			 *         a magnitude of the provided tolerance.
+			 */
+		constexpr static int CHECK_VORONOI_CELL_AREAS = 2;
+
+
+
 		/* The number of nodes of the original network: */
 		const size_t N;
 		
@@ -99,8 +120,9 @@ class VDTesselation {
 		 * If errors are detected, an std::runtime_error is thrown.
 		 */
 		VDTesselation(const std::vector<Node>& nodes,
-		              double tolerance = 1e-8,
-					  delaunay_algorithm_t algorithm = FORTUNES);
+		              double tolerance = 1e-10,
+		              delaunay_algorithm_t algorithm = FORTUNES,
+		              int checks = CHECK_DUAL_LINKS | CHECK_VORONOI_CELL_AREAS);
 		
 		/*!
 		 * \brief Obtain the set of links of the Delaunay triangulation.
@@ -200,6 +222,10 @@ class VDTesselation {
 		
 		/* Delaunay triangulation: */
 		mutable std::vector<Link> delaunay_links;
+
+		/* Mapping links of the Delaunay triangulation to links of the
+		 * Voronoi tesselation: */
+		mutable std::vector<size_t> dual_link_delaunay2voronoi;
 		
 		/* Voronoi tesselation: */
 		mutable std::vector<Node> voronoi_nodes;
@@ -213,6 +239,22 @@ class VDTesselation {
 		void calculate_voronoi_network() const;
 		
 		void calculate_voronoi_cell_areas() const;
+
+		void calculate_dual_links() const;
+
+		/*!
+		 * \brief For a link of the Delaunay triangulation, return the dual
+		 *        link of the Voronoi tesselation.
+		 * \param link A link of the Delaunay triangulation.
+		 * \param node2delaunay A vector of lists that for each node of the
+		 *                      original node set contain the Delaunay triangles
+		 *                      it is part of.
+		 * \return The dual link of the Voronoi tesselation, with indices
+		 *         therein.
+		 */
+		Link dual_link_d2v(const Link& link, const
+		                    std::vector<std::forward_list<size_t>>&
+		                        node2delaunay) const;
 
 		void merge_clusters() const;
 		

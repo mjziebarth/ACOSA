@@ -29,15 +29,16 @@
 #include <cmath>
 
 #include <iostream>
+#include <limits>
 
 using ACOSA::AlphaSpectrum;
 using ACOSA::AlphaShape;
 
 //------------------------------------------------------------------------------
 static void calculate_convex_hull_members(const std::vector<ACOSA::Node>& nodes,
-										  std::vector<bool>& is_ch_node,
-										  const std::vector<ACOSA::Link>& links,
-										  std::vector<bool>& is_ch_link)
+                                          std::vector<bool>& is_ch_node,
+                                          const std::vector<ACOSA::Link>& links,
+                                          std::vector<bool>& is_ch_link)
 {
 	const size_t N = nodes.size();
 	const size_t M = links.size();
@@ -101,45 +102,10 @@ static void calculate_convex_hull_members(const std::vector<ACOSA::Node>& nodes,
 	}
 }
 
-//------------------------------------------------------------------------------
-
-/*!
- * \brief Determine the dual edge of a Delaunay triangulation edge.
- * \param edge An edge of the Delaunay triangulation.
- * \param node2delaunay An array mapping node indices to lists of Delaunay
- *                      triangles these nodes are part of.
- * \param delaunay2voronoi An array mapping Delaunay triangles to Voronoi nodes
- *                         (multiple Delaunay triangles may map to a single
- *                          Voronoi node if they have been merged, e.g. the
- *                          corresponding nodes of the point set form a cyclic
- *                          polygon)
- * \return The Voronoi tesselation link dual to edge.
- */
-static ACOSA::Link dual_edge(const ACOSA::Link& edge,
-		const std::vector<std::forward_list<size_t>>& node2delaunay,
-		const std::vector<size_t>& delaunay2voronoi)
-{
-	/* Step 1: Find the Delaunay triangles which both nodes are part of: */
-	size_t tri[2];
-	int k=0;
-	for (size_t i : node2delaunay[edge.i]){
-		for (size_t j : node2delaunay[edge.j]){
-			if (i == j){
-				tri[k] = i;
-				++k;
-				if (k == 2)
-					return ACOSA::Link(delaunay2voronoi[tri[0]],
-									   delaunay2voronoi[tri[1]]);
-			}
-		}
-	}
-	throw std::runtime_error("Dual edge not found!");
-}
-
 
 //------------------------------------------------------------------------------
 AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
-					   const ACOSA::VDTesselation& tesselation)
+                             const ACOSA::VDTesselation& tesselation)
     : node_max_alpha(nodes.size())
 {
 	const size_t N = nodes.size();
@@ -148,7 +114,7 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 	std::vector<bool> is_convex_hull_node;
 	std::vector<bool> is_convex_hull_link;
 	calculate_convex_hull_members(nodes, is_convex_hull_node,
-								  tesselation.delaunay_links,
+	                              tesselation.delaunay_links,
 	                              is_convex_hull_link);
 
 	/* Step 2: Create a map from node indices to associated Voronoi cells.
@@ -169,6 +135,7 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 	 *         right dimensions: */
 	tesselation.calculate_voronoi_nodes();
 	tesselation.calculate_delaunay_links();
+	tesselation.calculate_dual_links();
 
 	alpha_intervals.resize(tesselation.delaunay_links.size());
 	delaunay_links = tesselation.delaunay_links;
@@ -192,7 +159,7 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 			double max_dist = 0.0; // Bigger than Pi, max dist on sphere
 			for (size_t j : node2delaunay[i]){
 				const Node& n2 = tesselation.voronoi_nodes[tesselation
-									.delaunay2voronoi[j]];
+				                    .delaunay2voronoi[j]];
 				double d = vec.distance(ACOSA::SphereVector(n2.lon, n2.lat));
 				if (d > max_dist)
 					max_dist = d;
@@ -209,8 +176,9 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 		/* First obtain the two Voronoi nodes connected by the Voronoi edge
 		 * corresponding to this Delaunay edge: */
 		ACOSA::Link dl = tesselation.delaunay_links[i];
-		ACOSA::Link vl = dual_edge(dl, node2delaunay,
-		                           tesselation.delaunay2voronoi);
+		ACOSA::Link vl = tesselation.voronoi_links[
+		                    tesselation.dual_link_delaunay2voronoi[i]];
+
 		/* Because we may have node merging, some Delaunay triangles may point
 		 * to the same Voronoi node so that we do not have a Voronoi edge
 		 * between them. Skip links between such pairs of Delaunay triangles: */
@@ -302,7 +270,7 @@ AlphaShape AlphaSpectrum::operator()(double alpha) const
 	shape_links.reserve(M);
 	for (size_t i=0; i<alpha_intervals.size(); ++i){
 		if (alpha <= alpha_intervals[i].max &&
-			alpha >= alpha_intervals[i].min)
+		    alpha >= alpha_intervals[i].min)
 		{
 			shape_links.emplace_back(delaunay_links[i].i,
 			                         delaunay_links[i].j);
@@ -320,8 +288,8 @@ AlphaShape::AlphaShape()
 
 //------------------------------------------------------------------------------
 AlphaShape::AlphaShape(const std::vector<size_t> nodes,
-					   const std::vector<ACOSA::Link>& links)
-	: nodes_(nodes)
+                       const std::vector<ACOSA::Link>& links)
+    : nodes_(nodes)
 {
 	/* Determine maximum node index: */
 	size_t max_i = 0;

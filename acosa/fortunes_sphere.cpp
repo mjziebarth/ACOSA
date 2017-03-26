@@ -204,7 +204,6 @@ void delaunay_triangulation_sphere(const std::vector<Node>& nodes,
 	                         delaunay_triangles);
 	
 	
-	
 	/* Now we're ready for the algorithm! */
 	while (!site_events.empty() || !circle_events.empty())
 	{
