@@ -103,7 +103,9 @@ static inline Beach init_beach(site_queue_t& site_events,
 		sites.push_back(e1);
 		sites.push_back(e2);
 
-		while (site_events.top().vec.lat() == e1.vec.lat()){
+		while (!site_events.empty() &&
+		       site_events.top().vec.lat() == e1.vec.lat())
+		{
 			sites.push_back(site_events.top());
 			site_events.pop();
 		}
