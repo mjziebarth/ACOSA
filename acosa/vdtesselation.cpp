@@ -146,12 +146,12 @@ VDTesselation::VDTesselation(const std::vector<Node>& nodes,
 				sum += d;
 			}
 
-			/* Throw exception if we're more than one magnitude further away
+			/* Throw exception if we're more than 10*N times further away
 			 * from 4pi than tolerance: */
-			if (std::abs(sum - 4*M_PI) > 10.0*tolerance){
+			if (std::abs(sum - 4*M_PI) > 10.0*N*tolerance){
 				throw std::runtime_error("Sum of Voronoi areas (" +
 				                         std::to_string(sum) + ") is more than "
-				                         "one magnitude farther than tolerance "
+				                         "10*N times farther than tolerance "
 				                         "away from 4pi!");
 			}
 		}
