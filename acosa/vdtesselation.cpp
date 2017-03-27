@@ -496,9 +496,9 @@ void VDTesselation::calculate_voronoi_network() const
 			last_i = next_i;
 		}
 
-		if (delaunay2voronoi[last_i] != delaunay2voronoi[path[0]]){
-			size_t l1 = delaunay2voronoi[path[0]];
-			size_t l2 = delaunay2voronoi[last_i];
+		size_t l1 = delaunay2voronoi[path[0]];
+		size_t l2 = delaunay2voronoi[last_i];
+		if (l1 != l2){
 			if (l1 < l2){
 				voronoi_links.emplace_back(l1, l2);
 			} else {
@@ -588,15 +588,21 @@ void VDTesselation::calculate_dual_links() const
 		/* Find the dual link of the Delaunay link: */
 		Link l = dual_link_d2v(delaunay_links[p], node2delaunay);
 
-		/* Now we need to find the link's index in
-		 * voronoi_links: */
-		std::unordered_map<Link,size_t>::const_iterator it = vlink2id.find(l);
-		if (it == vlink2id.end())
-			throw std::runtime_error("calculate_dual_links():\nLink ("
-									 + std::to_string(l.i) + "," +
-									 std::to_string(l.j) +
-									 ") not found in set of Voronoi links!");
-		dual_link_delaunay2voronoi[p] = it->second;
+		/* If we have merged clusters (-> more than 3 cocircular nodes), there
+		 * will be self links. In these cases set invalid index: */
+		if (l.i == l.j){
+			dual_link_delaunay2voronoi[p] = NO_LINK;
+		} else {
+			/* Now we need to find the link's index in
+			 * voronoi_links: */
+			std::unordered_map<Link,size_t>::const_iterator it = vlink2id.find(l);
+			if (it == vlink2id.end())
+				throw std::runtime_error("calculate_dual_links():\nLink ("
+			                             + std::to_string(l.i) + "," +
+			                             std::to_string(l.j) +
+			                             ") not found in set of Voronoi links!");
+			dual_link_delaunay2voronoi[p] = it->second;
+		}
 	}
 
 	/* Update cache state: */

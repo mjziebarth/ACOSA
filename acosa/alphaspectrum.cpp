@@ -179,18 +179,22 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 	 *         bounds inside which it is part of the alpha shape of the point
 	 *         set: */
 	for (size_t i=0; i<tesselation.delaunay_links.size(); ++i){
-		/* First obtain the two Voronoi nodes connected by the Voronoi edge
-		 * corresponding to this Delaunay edge: */
-		ACOSA::Link dl = tesselation.delaunay_links[i];
-		ACOSA::Link vl = tesselation.voronoi_links[
-		                    tesselation.dual_link_delaunay2voronoi[i]];
-
-		/* Because we may have node merging, some Delaunay triangles may point
-		 * to the same Voronoi node so that we do not have a Voronoi edge
-		 * between them. Skip links between such pairs of Delaunay triangles: */
-		if (vl.i == vl.j){
+		/* Obtain the id (in terms of Voronoi link array) of the i'th Delaunay
+		 * tesselation link. In cases where there are more than 3 cocircular
+		 * points, the Delaunay tesselation is not unique and, more importantly,
+		 * two or more Voronoi nodes are equal, meaning they have a link of
+		 * spatial length 0.
+		 * Convention here is that between these nodes (they are merged) there
+		 * is no link. Thus, the corresponding Delaunay tesselation has no dual
+		 * link, which we have to check.*/
+		size_t dual_link = tesselation.dual_link_delaunay2voronoi[i];
+		if (dual_link == ACOSA::VDTesselation::NO_LINK)
 			continue;
-		}
+
+		/* If we have a dual link, obtain both the Delaunay and the dual Voronoi
+		 * link: */
+		ACOSA::Link dl = tesselation.delaunay_links[i];
+		ACOSA::Link vl = tesselation.voronoi_links[dual_link];
 
 //      THIS CASE IS DIFFERENT IN A SPHERICAL TOPOLOGY AS WE DO NOT HAVE SEMI-
 //      INFINITE LINES!
