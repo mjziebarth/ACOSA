@@ -108,9 +108,9 @@ delaunay_triangulation_brute_force(const std::vector<Node>& nodes,
 
 //------------------------------------------------------------------------------
 VDTesselation::VDTesselation(const std::vector<Node>& nodes,
-                             double tolerance,
-                             delaunay_algorithm_t algorithm,
-                             int checks)
+							 double tolerance,
+							 delaunay_algorithm_t algorithm,
+							 int checks, bool on_error_display_nodes)
     : nodes(nodes), cache_state(0), N(nodes.size()), tolerance(tolerance)
 {
 	try {
@@ -157,6 +157,16 @@ VDTesselation::VDTesselation(const std::vector<Node>& nodes,
 		}
 	} catch (const std::runtime_error& e){
 		/* Add a little hint to the error message: */
+		if (on_error_display_nodes){
+			std::cerr << "ERROR in VDTesselation().\nNode set that caused the "
+						 "error:\n";
+			std::cerr.precision(std::numeric_limits<double>::digits10);
+			for (const Node& n : nodes){
+				std::cerr << "\t(" << n.lon << "," << n.lat << ")\n";
+			}
+			std::cerr << "\n";
+		}
+
 		throw std::runtime_error("VDTesselation failed:\n\""
 		                         + std::string(e.what()) +
 		                         "\n\nHint: Changing tolerance "
@@ -580,7 +590,13 @@ void VDTesselation::calculate_dual_links() const
 
 		/* Now we need to find the link's index in
 		 * voronoi_links: */
-		dual_link_delaunay2voronoi[p] = vlink2id.at(l);
+		std::unordered_map<Link,size_t>::const_iterator it = vlink2id.find(l);
+		if (it == vlink2id.end())
+			throw std::runtime_error("calculate_dual_links():\nLink ("
+									 + std::to_string(l.i) + "," +
+									 std::to_string(l.j) +
+									 ") not found in set of Voronoi links!");
+		dual_link_delaunay2voronoi[p] = it->second;
 	}
 
 	/* Update cache state: */

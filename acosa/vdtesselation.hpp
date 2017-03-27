@@ -113,6 +113,13 @@ class VDTesselation {
 		 *                  if tolerance is too low.
 		 *                  Random node sets are, empirically more
 		 *                  resistant to lower tolerance
+		 * \param checks Determines which checks to do after the Delaunay
+		 *               triangulation has been created.
+		 *               Default: CHECK_DUAL_LINKS | CHECK_VORONOI_CELL_AREAS
+		 * \param on_error_display_nodes If check fails, the node coordinates
+		 *                               are written to std::cerr if true.
+		 *                               This can be useful for debugging on
+		 *                               randomly generated networks.
 		 *
 		 * This method executes the O(N*log(N)) sweepline algorithm
 		 * from [1].
@@ -122,7 +129,8 @@ class VDTesselation {
 		VDTesselation(const std::vector<Node>& nodes,
 		              double tolerance = 1e-10,
 		              delaunay_algorithm_t algorithm = FORTUNES,
-		              int checks = CHECK_DUAL_LINKS | CHECK_VORONOI_CELL_AREAS);
+					  int checks = CHECK_DUAL_LINKS | CHECK_VORONOI_CELL_AREAS,
+					  bool on_error_display_nodes = true);
 		
 		/*!
 		 * \brief Obtain the set of links of the Delaunay triangulation.
