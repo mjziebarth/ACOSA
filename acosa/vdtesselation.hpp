@@ -127,7 +127,7 @@ class VDTesselation {
 		 * If errors are detected, an std::runtime_error is thrown.
 		 */
 		VDTesselation(const std::vector<Node>& nodes,
-		              double tolerance = 1e-12,
+		              double tolerance = 1e-10,
 		              delaunay_algorithm_t algorithm = FORTUNES,
 					  int checks = CHECK_DUAL_LINKS | CHECK_VORONOI_CELL_AREAS,
 					  bool on_error_display_nodes = true);
