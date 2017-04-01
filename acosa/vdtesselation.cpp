@@ -259,7 +259,8 @@ VDTesselation::VDTesselation(const std::vector<Node>& nodes,
 					throw std::runtime_error("Sum of Voronoi areas (" +
 					                    std::to_string(sum) + ") is more than "
 					                    "10*N times farther than tolerance "
-					                    "away from 4pi!");
+					                    "away from 4pi=" +
+					                    std::to_string(4*M_PI) + "!");
 				}
 			}
 		} catch (const std::runtime_error& e){
@@ -276,7 +277,7 @@ VDTesselation::VDTesselation(const std::vector<Node>& nodes,
 
 			throw std::runtime_error("VDTesselation failed:\n\""
 			                         + std::string(e.what()) +
-			                         "\n\nHint: Changing tolerance "
+			                         "\"\n\nHint: Changing tolerance "
 			                         "or inverting the latitude coordinates "
 			                         "may solve the problems encountered.\n");
 		}
@@ -506,6 +507,61 @@ void VDTesselation::calculate_voronoi_nodes() const
 
 
 //------------------------------------------------------------------------------
+
+static void voronoi_network_concyclic(const std::vector<Node>& nodes,
+    std::vector<Node>& voronoi_nodes, std::vector<double>& voronoi_areas,
+    double tolerance)
+{
+	const size_t N = nodes.size();
+
+	/* Voronoi areas: Calculate longitude of nodes in a coordinate system
+	 * given by z vector voronoi_nodes[0] and x vector the z-orthogonal part
+	 * of nodes[0]: */
+	SphereVectorEuclid ax_z(voronoi_nodes[0]);
+	SphereVectorEuclid ax_x(nodes[0]);
+	ax_x = (ax_x - (ax_x*ax_z)*ax_z);
+	ax_x /= ax_x.norm();
+	SphereVectorEuclid ax_y = ax_z.cross(ax_x);
+	ax_y /= ax_y.norm(); // Precaution. Should be normed modulo rounding errors.
+	struct indexed_lon_t{
+		double val;
+		size_t id;
+
+		bool operator<(const indexed_lon_t& other) const {
+			return val < other.val;
+		}
+	};
+	std::vector<indexed_lon_t> lon(N);
+	lon[0] = {0.0, 0};
+	for (size_t i=1; i<N; ++i){
+		/* Calculate coordinates in system given by ax_x and ax_z: */
+		SphereVectorEuclid vec(nodes[i]);
+		double x = vec*ax_x;
+		double y = vec*ax_y;
+		lon[i].val = std::atan2(y,x);
+		if (lon[i].val < 0.0)
+			lon[i].val += M_PI;
+		lon[i].id = i;
+	}
+
+	/* Sort nodes by longitude in this coordinate system so that we have
+	 * neighbouring Voronoi cells next to each other: */
+	std::sort(lon.begin(), lon.end());
+
+	/* Now we can calculate the Voronoi cell areas: */
+	voronoi_areas.resize(N, 0.0);
+	for (size_t i=0; i<N; ++i){
+		double distance = lon[(i+1) % N].val - lon[i].val;
+		if (distance < 0.0)
+			/* May happen for i=N-1: */
+			distance += 2*M_PI;
+		voronoi_areas[i] += distance;
+		voronoi_areas[(i+1) % N] += distance;
+	}
+
+}
+
+//------------------------------------------------------------------------------
 void VDTesselation::calculate_voronoi_network() const
 {
 	/* Check if we've previously calculated the Voronoi network: */
@@ -515,10 +571,17 @@ void VDTesselation::calculate_voronoi_network() const
 	/* First make sure that Voronoi nodes are calculated: */
 	calculate_voronoi_nodes();
 
-	/* TODO : Handle the case that all nodes are concyclic (N>3) seperately! */
-	if (voronoi_nodes.size() == 2)
-		throw std::runtime_error("Case of concyclic nodes for N>3 not yet "
-	                             "handled properly!");
+	/* Handle the case that all nodes are concyclic (N>3) seperately: */
+	if (voronoi_nodes.size() == 2){
+		voronoi_network_concyclic(nodes, voronoi_nodes, voronoi_areas,
+		                          tolerance);
+
+		/* Cache state: */
+		cache_state |= (VORONOI_LINKS_CACHED | VORONOI_CELLS_CACHED);
+		tidy_up_cache();
+
+		return;
+	}
 
 	/* Init Voronoi cell area vector: */
 	voronoi_areas.resize(nodes.size(), 0.0);
@@ -673,6 +736,20 @@ void VDTesselation::calculate_dual_links() const
 	 * nodes: */
 	calculate_delaunay_links();
 	calculate_voronoi_network();
+
+	/* Handle case where all nodes are concyclic: */
+	if (voronoi_nodes.size() == 2){
+		/* Since we cannot define the Voronoi edges in the framework used
+		 * (which allows only at max one unique link between each Voronoi node
+		 *  pair), we have to set the dual mapping to NO_LINK: */
+		dual_link_delaunay2voronoi.resize(delaunay_triangles_.size(), NO_LINK);
+
+		/* Update cache state: */
+		cache_state |= DUAL_LINKS_CACHED;
+		tidy_up_cache();
+
+		return;
+	}
 
 	/* Create a map mapping all triangles a node is part of by the node's
 	 * index: */

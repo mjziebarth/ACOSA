@@ -124,6 +124,9 @@ cdef class VoronoiDelaunayTesselation:
 	              np.ndarray[float, ndim=1] lat,
 	              double tolerance = 1e-10
 	    ):
+		"""
+		Will throw a runtime error if VDTesselation failed.
+		"""
 		# Sanity checks:
 		cdef size_t N
 		N = len(lon)
