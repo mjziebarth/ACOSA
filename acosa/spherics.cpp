@@ -47,6 +47,11 @@ SphereVector::SphereVector(double lon, double lat)
 }
 
 //----------------------------------------------------------------------
+SphereVector::SphereVector(const Node& node) : SphereVector(node.lon, node.lat)
+{
+}
+
+//----------------------------------------------------------------------
 bool SphereVector::null() const {
 	return lat_ == M_PI;
 }
@@ -83,6 +88,12 @@ double SphereVector::distance(const SphereVector& other) const
 
 	return std::atan2(std::sqrt(sum1*sum1 + sum2*sum2),
 	                  slat1*slat2 + clat1*clat2*cd);
+}
+
+//------------------------------------------------------------------------------
+SphereVector::operator Node() const
+{
+	return Node(lon_, lat_);
 }
 
 
@@ -142,17 +153,39 @@ SphereVectorEuclid::SphereVectorEuclid(const Node& node)
 //----------------------------------------------------------------------
 double SphereVectorEuclid::lat() const 
 {
-	if (z > 0.87){
-		return std::acos(std::sqrt(x*x+y*y));
-	} else if (z < -0.87){
-		return -std::acos(std::sqrt(x*x+y*y));
+	/* We need to make sure this vector is normed: */
+	double nrm = norm();
+	double z_ = z / nrm;
+
+	/* Depending on value of z, the most exact trigonometric function may
+	 * vary (empircal tests done for determining 0.87 value): */
+	if (z_ > 0.87){
+		double x_ = x / nrm;
+		double y_ = y / nrm;
+		return std::acos(std::sqrt(x_*x_+y_*y_));
+	} else if (z_ < -0.87){
+		double x_ = x / nrm;
+		double y_ = y / nrm;
+		return -std::acos(std::sqrt(x_*x_+y_*y_));
 	}
 //	if (z >= 1.0){
 //		return 0.5*M_PI;
 //	} else if (z <= -1.0) {
 //		return -0.5*M_PI;
 //	}
-	return std::asin(z);
+	return std::asin(z_);
+}
+
+//----------------------------------------------------------------------
+ACOSA::SphereVectorEuclid::operator SphereVector() const
+{
+	return SphereVector(lon(), lat());
+}
+
+//----------------------------------------------------------------------
+SphereVectorEuclid::operator Node() const
+{
+	return Node(lon(), lat());
 }
 
 //----------------------------------------------------------------------

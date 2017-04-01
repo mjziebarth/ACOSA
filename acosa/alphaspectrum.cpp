@@ -188,7 +188,7 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 		 * is no link. Thus, the corresponding Delaunay tesselation has no dual
 		 * link, which we have to check.*/
 		size_t dual_link = tesselation.dual_link_delaunay2voronoi[i];
-		if (dual_link == ACOSA::VDTesselation::NO_LINK)
+		if (dual_link == ACOSA::NO_LINK)
 			continue;
 
 		/* If we have a dual link, obtain both the Delaunay and the dual Voronoi

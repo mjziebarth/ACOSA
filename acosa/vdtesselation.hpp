@@ -31,7 +31,6 @@
 #include <vector>
 #include <forward_list>
 #include <basic_types.hpp>
-#include <limits>
 
 namespace ACOSA {
 
@@ -128,7 +127,7 @@ class VDTesselation {
 		 * If errors are detected, an std::runtime_error is thrown.
 		 */
 		VDTesselation(const std::vector<Node>& nodes,
-		              double tolerance = 1e-10,
+		              double tolerance = 1e-12,
 		              delaunay_algorithm_t algorithm = FORTUNES,
 					  int checks = CHECK_DUAL_LINKS | CHECK_VORONOI_CELL_AREAS,
 					  bool on_error_display_nodes = true);
@@ -234,7 +233,6 @@ class VDTesselation {
 
 		/* Mapping links of the Delaunay triangulation to links of the
 		 * Voronoi tesselation: */
-		static constexpr size_t NO_LINK = std::numeric_limits<size_t>::max();
 		mutable std::vector<size_t> dual_link_delaunay2voronoi;
 		
 		/* Voronoi tesselation: */

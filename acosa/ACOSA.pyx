@@ -122,7 +122,7 @@ cdef class VoronoiDelaunayTesselation:
 	# Constructor:
 	def __cinit__(self, np.ndarray[float, ndim=1] lon,
 	              np.ndarray[float, ndim=1] lat,
-	              double tolerance = 1e-10
+	              double tolerance = 1e-13
 	    ):
 		# Sanity checks:
 		cdef size_t N

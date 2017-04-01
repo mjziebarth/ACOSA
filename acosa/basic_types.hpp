@@ -20,8 +20,12 @@
 
 #include <stddef.h>
 #include <functional>
+#include <limits>
 
 namespace ACOSA {
+
+
+static constexpr size_t NO_LINK = std::numeric_limits<size_t>::max();
 
 struct Triangle {
 	public:
