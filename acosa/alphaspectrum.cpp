@@ -161,7 +161,7 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 			 * associated Voronoi vertices and take the distance of the
 			 * farthest away: */
 			ACOSA::SphereVector vec(nodes[i].lon, nodes[i].lat);
-			double max_dist = 0.0; // Bigger than Pi, max dist on sphere
+			double max_dist = 0.0;
 			for (size_t j : node2delaunay[i]){
 				const Node& n2 = tesselation.voronoi_nodes[tesselation
 				                    .delaunay2voronoi[j]];
@@ -195,14 +195,6 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 		 * link: */
 		ACOSA::Link dl = tesselation.delaunay_links[i];
 		ACOSA::Link vl = tesselation.voronoi_links[dual_link];
-
-//      THIS CASE IS DIFFERENT IN A SPHERICAL TOPOLOGY AS WE DO NOT HAVE SEMI-
-//      INFINITE LINES!
-//		if (is_convex_hull_link[i]){
-//			/* Case c) in [2], Lemma 3:
-//			 * Here we ignore the fact that the line is not actually
-//			 * semi-infinite since we're on a sphere not in a plane. */
-//		} else {
 
 		/* Case a) in [2], Lemma 3:
 		 *		alpha \in [alpha_min, alpha_max]
@@ -253,6 +245,12 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 //------------------------------------------------------------------------------
 AlphaShape AlphaSpectrum::operator()(double alpha) const
 {
+	/* If (alpha > -1/pi), the alpha shape is empty since pi is the maximum
+	 * radius on the sphere: */
+	std::vector<size_t> shape_nodes;
+	std::vector<ACOSA::Link> shape_links;
+	if (alpha > -1.0/M_PI)
+		return AlphaShape(shape_nodes, shape_links);
 
 	/* Determine all nodes of the shape at current alpha. Also generate a
 	 * map to map these nodes' indices in the original point set to indices in
@@ -262,7 +260,6 @@ AlphaShape AlphaSpectrum::operator()(double alpha) const
 		if (alpha < a)
 			++N;
 	}
-	std::vector<size_t> shape_nodes;
 	shape_nodes.reserve(N);
 	for (size_t i=0; i<node_max_alpha.size(); ++i){
 		if (alpha < node_max_alpha[i]){
@@ -276,7 +273,6 @@ AlphaShape AlphaSpectrum::operator()(double alpha) const
 		if (alpha <= I.max && alpha >= I.min)
 			++M;
 	}
-	std::vector<ACOSA::Link> shape_links;
 	shape_links.reserve(M);
 	for (size_t i=0; i<alpha_intervals.size(); ++i){
 		if (alpha <= alpha_intervals[i].max &&
