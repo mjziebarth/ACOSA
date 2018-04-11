@@ -375,8 +375,16 @@ cdef class PyConvexHull:
 			= np.zeros(N, dtype=np.bool_)
 		
 		cdef size_t i
+		cdef Node node
 		for i in range(N):
-			contained[i] = dereference(self.hull).is_contained(Node(lon[i],lat[i]))
+			# When writing ".is_contained(Node(lon[i],lat[i]))", Cython creates
+			# a CONSTANT global struct that it tries to assign the lon and lat
+			# values and the pass to .is_contained. Passing to the constant struct
+			# then obviously does not work...
+			# Workaround:
+			node.lon = lon[i]
+			node.lat = lat[i]
+			contained[i] = dereference(self.hull).is_contained(node)
 		
 		return contained
 	
