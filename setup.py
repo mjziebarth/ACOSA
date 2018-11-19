@@ -48,7 +48,6 @@ extensions.append(Extension('acosa',
 	         'acosa/alphaspectrum.cpp'],
 	include_dirs=[np.get_include(),'acosa'],
 	extra_compile_args=['-std=c++14'],
-	working="/home/malte/git/ACOSA",
 	language='c++'))
 
 extensions[0].cython_c_in_temp = False
