@@ -71,7 +71,7 @@ cdef extern from "vdtesselation.hpp" namespace "ACOSA":
 # The ConvexHull class:
 cdef extern from "convexhull.hpp" namespace "ACOSA":
 	cdef cppclass ConvexHull :
-		ConvexHull(const vector[Node]& nodes, const Node& inside)
+		ConvexHull(const vector[Node]& nodes, const Node& inside, double tolerance) except +
 		
 		vector[size_t].const_iterator begin() const
 		
@@ -242,48 +242,49 @@ cdef class VoronoiDelaunayTesselation:
 		if not self.tesselation:
 			raise Exception("VoronoiDelaunayTesselation() :\nVDTesselation "
 				"was not initialized!\n")
-		
+
 		# Copy triangles to numpy array:
 		cdef size_t N = dereference(self.tesselation).delaunay_triangles().size()
 		cdef np.ndarray[long, ndim=2] triangles = np.zeros((N,3),dtype=long)
-		
+
 		for i in range(N):
 			triangles[i,0] = dereference(self.tesselation).delaunay_triangles()[i].i
 			triangles[i,1] = dereference(self.tesselation).delaunay_triangles()[i].j
 			triangles[i,2] = dereference(self.tesselation).delaunay_triangles()[i].k
-		
+
 		return triangles
-	
+
+
 	# Nodes of the network associated to a set of Voronoi nodes:
 	def associated_nodes(self, np.ndarray[long, ndim=1] voronoi_nodes):
 		# Sanity checks:
 		if not self.tesselation:
 			raise Exception("VoronoiDelaunayTesselation.associated_nodes():\n"
 				"VDTesselation was not initialized!\n")
-		
+
 		cdef size_t VN = dereference(self.tesselation).size()
 		if np.any(voronoi_nodes >= VN) or np.any(voronoi_nodes < 0):
 			raise ValueError("VoronoiDelaunayTesselation.associated_nodes() :\n"
 				"At least one Voronoi node index out of bounds!")
-		
+
 		# Copy Voronoi index to c++ container:
 		cdef vector[size_t] vnodes
 		vnodes.resize(len(voronoi_nodes))
 		cdef size_t i
 		for i in range(len(voronoi_nodes)):
 			vnodes[i] = voronoi_nodes[i]
-		
+
 		# Obtain vector of associated nodes:
 		cdef vector[size_t] associated
 		dereference(self.tesselation).associated_nodes(vnodes, associated)
 		vnodes.clear()
-		
+
 		# Copy to numpy output:
 		cdef np.ndarray[long, ndim=1] out = np.zeros(associated.size(),
 		                                             dtype=long)
 		for i in range(associated.size()):
 			out[i] = associated[i]
-		
+
 		return out
 
 
@@ -291,89 +292,103 @@ cdef class VoronoiDelaunayTesselation:
 ################################################################################
 cdef class PyConvexHull:
 	cdef ConvexHull* hull
-	
+
 	# Constructor:
-	def __cinit__(self, np.ndarray[float, ndim=1] lon,
-	              np.ndarray[float, ndim=1] lat,
-	              float lon_inside, float lat_inside
-	    ):
+	def __cinit__(self, lon, lat, lon_inside, lat_inside, tolerance=1e-12):
 		# Sanity checks:
+		assert isinstance(lon,np.ndarray)
+		assert isinstance(lat,np.ndarray)
+
 		cdef size_t N
 		N = len(lon)
-	
+
 		if (len(lat) != N):
 			raise Exception("PyConvexHull() :\nLength of longitude "
 				"and latitude arrays not equal!")
-		
+
 		# Copy numpy arrays to c++ vectors:
 		cdef size_t i
 		cdef double d2r = np.pi/180.0
 		cdef double lon_i = lon_inside
 		cdef double lat_i = lat_inside
+		cdef double _tolerance = float(tolerance)
 		cdef Node inside = Node(d2r*lon_i, d2r*lat_i)
-	
+
 		cdef vector[Node] nodes
 		nodes.resize(N)
 		for i in range(N):
 			nodes[i].lon = d2r*lon[i]
 			nodes[i].lat = d2r*lat[i]
-		
+
 		# Create VDTesselation object:
-		self.hull= new ConvexHull(nodes, inside)
-		
+		self.hull= new ConvexHull(nodes, inside, tolerance=_tolerance)
+
 		if not self.hull:
 			raise Exception("PyConvexHull() :\nCould not allocate "
 				"ConvexHull object!")
-	
+
 	# Destructor:
 	def __dealloc__(self):
 		if self.hull:
 			del self.hull
-	
+
 	# Obtain list of hull nodes:
 	def nodes(self):
 		if not self.hull:
 			return None
-		
+
 		cdef size_t N = dereference(self.hull).size()
 		cdef vector[size_t].const_iterator it = dereference(self.hull).begin()
 		cdef size_t i
-		
+
 		cdef np.ndarray[ndim=1, dtype=size_t] nodes = np.zeros(N, dtype='uint64')
-		
+
 		for i in range(N):
 			nodes[i] = dereference(it)
 			preincrement(it)
-		
+
 		return nodes
-	
+
 	# Check if nodes are contained in the convex hull:
-	def contains(self, np.ndarray[float, ndim=1] lon,
-	             np.ndarray[float, ndim=1] lat
-	    ):
-		
+	def contains(self, lon, lat):
+		"""
+		Query whether the convex hull contains a set of
+		longitude and latitude coordinates.
+
+		Required arguments:
+		   lon : Set of longitudes in degrees.
+		   lat : Set of latitudes in degrees.
+
+		The coordinates need to be convertible to one-dimensional
+		numpy ndarrays and the size of longitude and latitude
+		arrays need to be equal.
+
+		Returns:
+		   An array of booleans, each indicating whether the
+		   corresponding coordinate pair is contained in the
+		   convex hull.
+		"""
+		# Input safety:
+		cdef np.ndarray[double, ndim=1, cast=True] lon_fix \
+		   = np.atleast_1d(np.deg2rad(lon).astype(float).flatten())
+		cdef np.ndarray[double, ndim=1, cast=True] lat_fix \
+		   = np.atleast_1d(np.deg2rad(lat).astype(float).flatten())
+
 		# Sanity checks:
 		cdef size_t N
-		N = len(lon)
-	
-		if (len(lat) != N):
+		N = len(lon_fix)
+
+		if (len(lat_fix) != N):
 			raise Exception("PyConvexHull.contains() :\nLength of longitude "
 				"and latitude arrays not equal!")
-		
+
 		if not self.hull:
 			raise Exception("PyConvexHull.contains() :\nNo hull object was "
 				"allocated!")
-		
-		
-		# Convert to radians:
-		cdef double d2r = np.pi/180.0
-		lon = d2r*lon
-		lat = d2r*lat
-		
-		
+
 		cdef np.ndarray[np.uint8_t, ndim=1, cast=True] contained \
 			= np.zeros(N, dtype=np.bool_)
-		
+
 		cdef size_t i
 		cdef Node node
 		for i in range(N):
@@ -382,36 +397,36 @@ cdef class PyConvexHull:
 			# values and the pass to .is_contained. Passing to the constant struct
 			# then obviously does not work...
 			# Workaround:
-			node.lon = lon[i]
-			node.lat = lat[i]
+			node.lon = lon_fix[i]
+			node.lat = lat_fix[i]
 			contained[i] = dereference(self.hull).is_contained(node)
-		
+
 		return contained
-	
+
+
 	# Calculate distances to border of convex hull:
 	def distance_to_border(self, np.ndarray[float, ndim=1] lon,
 	                       np.ndarray[float, ndim=1] lat
 	    ):
-	    
 		"""
 		Calculates the distance of nodes inside this convex hull to the
 		hull's borders.
 		
 		Raises exception if given any of the given coordinates are outside the hull.
 		"""
-		
+
 		# Sanity checks:
 		cdef size_t N
 		N = len(lon)
-	
+
 		if (len(lat) != N):
 			raise Exception("PyConvexHull.distance_to_border() :\nLength of "
 			                "longitude and latitude arrays not equal!")
-		
+
 		if not self.hull:
 			raise Exception("PyConvexHull.distance_to_border() :\nNo hull "
 			                "object was allocated!")
-		
+
 		# Create node vector:
 		cdef vector[Node] nodes
 		cdef double d2r = np.pi/180.0
@@ -420,20 +435,19 @@ cdef class PyConvexHull:
 		for i in range(N):
 			nodes[i].lon = d2r*lon[i]
 			nodes[i].lat = d2r*lat[i]
-		
+
 		# Calculate distance:
 		cdef vector[double] dist_vec
 		try:
 			dereference(self.hull).distance_to_border(nodes, dist_vec)
 		except:
 			raise Exception("ConvexHull empty!")
-		
-		
+
 		# Copy to numpy array:
 		cdef np.ndarray[double, ndim=1] distance = np.zeros(N, dtype=float)
 		for i in range(N):
 			distance[i] = dist_vec[i]
-		
+
 		return distance
 
 
