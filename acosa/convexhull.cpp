@@ -211,7 +211,7 @@ ConvexHull::ConvexHull(const std::vector<Node>& nodes,
 			/* TODO : Test this part of the code. This is written and never
 			 *        tested. */
 			std::cerr << "Warning: You are entering uncharted territory in the "
-			             "source code! (convexhull.cpp, lines " << __LINE << "+)\n";
+			             "source code! (convexhull.cpp, lines " << __LINE__ << "+)\n";
 			if (hull.size() == 0){
 				/* If nodes exist, hull must contain at least one element. */
 				if (throw_on_fail)
