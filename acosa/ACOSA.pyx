@@ -405,21 +405,24 @@ cdef class PyConvexHull:
 
 
 	# Calculate distances to border of convex hull:
-	def distance_to_border(self, np.ndarray[float, ndim=1] lon,
-	                       np.ndarray[float, ndim=1] lat
-	    ):
+	def distance_to_border(self, lon, lat):
 		"""
 		Calculates the distance of nodes inside this convex hull to the
 		hull's borders.
 		
 		Raises exception if given any of the given coordinates are outside the hull.
 		"""
+		# Convert latlon to known types:
+		cdef np.ndarray[double, ndim=1, cast=True] lon_fix \
+		   = np.atleast_1d(np.deg2rad(lon).astype(float).flatten())
+		cdef np.ndarray[double, ndim=1, cast=True] lat_fix \
+		   = np.atleast_1d(np.deg2rad(lat).astype(float).flatten())
 
 		# Sanity checks:
 		cdef size_t N
-		N = len(lon)
+		N = len(lon_fix)
 
-		if (len(lat) != N):
+		if (len(lat_fix) != N):
 			raise Exception("PyConvexHull.distance_to_border() :\nLength of "
 			                "longitude and latitude arrays not equal!")
 
@@ -429,12 +432,11 @@ cdef class PyConvexHull:
 
 		# Create node vector:
 		cdef vector[Node] nodes
-		cdef double d2r = np.pi/180.0
 		cdef size_t i
 		nodes.resize(N)
 		for i in range(N):
-			nodes[i].lon = d2r*lon[i]
-			nodes[i].lat = d2r*lat[i]
+			nodes[i].lon = lon_fix[i]
+			nodes[i].lat = lat_fix[i]
 
 		# Calculate distance:
 		cdef vector[double] dist_vec
