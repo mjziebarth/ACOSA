@@ -114,15 +114,48 @@ cdef extern from "alphaspectrum.hpp" namespace "ACOSA":
 ####################################################################################
 cdef class VoronoiDelaunayTesselation:
 	"""
-	This class is a wrapper class around the VDTesselation c++ class.
+	A wrapper class around the VDTesselation c++ class, computing the
+	Voronoi tesselation and Delaunay triangulation of a set of points on
+	the unit sphere. The algorithm used is a O(N*log(N)) sweepline
+	algorithm [1]. After initialization, the class may be queried about
+	the tesselations' network structure and the Voronoi cells spatial
+	layout.
+
 	Keeping an instance of this class alive allows caching of computed values.
+
+	[1] Xiaoyu Zheng et al.: A Plane Sweep Algorithm for the Voronoi
+	    Tesselation of the Sphere, in: electronic-Liquid Crystal
+	    Communications, 2011-12-13.
+	    http://www.e-lc.org/docs/2011_12_05_14_35_11
+
+	Note: A similar algorithm, which I was not aware of at the time
+	of implementation, was derived earlier by Dinis & Marmede (2010)
+	(doi:10.1109/ISVD.2010.32).
 	"""
 	cdef VDTesselation* tesselation
-	
+
 	# Constructor:
-	def __cinit__(self, lon, lat, tolerance = 1e-10
-	    ):
+	def __cinit__(self, lon, lat, tolerance = 1e-10):
 		"""
+		Initialize a VoronoiDelaunayTesselation instance, running the
+		sweepline algorithm and creating data structures for both the
+		Voronoi tesselation and the Delanay triangulation.
+
+		Required arguments:
+		   lon : Array of longitude coordinates in degrees.
+		   lat : Array of latitude coordinates in degrees.
+
+		Optional keyword argument:
+		   tolerance : The absolute tolerance to use for various
+		               floating point comparisons. Must be
+		               convertible to float. Experimenting with
+		               this parameter may sometimes solve problems
+		               in numerical instable configurations.
+		               (Default: 1e-10)
+
+		The input coordinates need to be convertible to numpy arrays
+		and are flattened before executing the algorithm. The flattened
+		arrays are required to be of same length.
 		Will throw a runtime error if VDTesselation failed.
 		"""
 		# Input safety:
@@ -139,7 +172,7 @@ cdef class VoronoiDelaunayTesselation:
 		if (len(lat_fix) != N):
 			raise Exception("VoronoiDelaunayTesselation() :\nLength of longitude "
 				"and latitude arrays not equal!")
-		
+
 		# Copy numpy arrays to c++ vectors:
 		cdef size_t i
 		cdef vector[Node] nodes
@@ -147,53 +180,70 @@ cdef class VoronoiDelaunayTesselation:
 		for i in range(N):
 			nodes[i].lon = lon_fix[i]
 			nodes[i].lat = lat_fix[i]
-		
+
 		# Create VDTesselation object:
+		# TODO put this into a smart pointer.
 		self.tesselation = new VDTesselation(nodes,_tolerance)
-		
+
 		if not self.tesselation:
 			raise Exception("VoronoiDelaunayTesselation() :\nCould not allocate "
 				"VDTesselation object!")
-	
+
 	# Destructor:
 	def __dealloc__(self):
 		if self.tesselation:
 			del self.tesselation
-	
+
 	# Voronoi cell areas:
 	def voronoi_cell_areas(self):
 		# Sanity check:
 		if not self.tesselation:
 			raise Exception("VoronoiDelaunayTesselation() :\nVDTesselation "
 				"was not initialized!\n")
-		
+
 		# Obtain vector of areas:
 		cdef vector[double] areas
 		dereference(self.tesselation).voronoi_cell_areas(areas)
-		
+
 		# Copy to numpy array:
 		cdef np.ndarray[float, ndim=1] np_areas = np.zeros(areas.size(), 
 		                                                   dtype=np.float32)
-		
+
 		cdef size_t i
 		for i in range(areas.size()):
 			np_areas[i] = areas[i]
-		
+
 		# Return numpy array:
 		return np_areas
-	
-	# Voronoi tesselation:
+
+
 	def voronoi_tesselation(self):
+		"""
+		Obtain the Voronoi tesselation.
+
+		Returns (lon, lat, links):
+		   lon   : One-dimensional numpy array of longitude
+		           coordinates of the Voronoi tesselation vertices.
+		   lat   : One-dimensional numpy array of latitude
+		           coordinates of the Voronoi tesselation vertices.
+		   links : Two-dimensional Mx2 numpy array representing the
+		           Voronoi tesselation link list.
+
+		Both lon and lat are length N, where N is the number of
+		vertices of the tesselation. The pair (i,j)=links[k,:]
+		indicates a link between the Voronoi tesselation vertices
+		(lon[i],lat[i]) and (lon[j],lat[j]).
+		"""
 		# Sanity check:
 		if not self.tesselation:
 			raise Exception("VoronoiDelaunayTesselation() :\nVDTesselation "
 				"was not initialized!\n")
-		
+
 		# Obtain vectors of nodes and links:
 		cdef vector[Node] nodes
 		cdef vector[Link] links
 		dereference(self.tesselation).voronoi_tesselation(nodes, links)
-		
+
 		# Copy to numpy arrays:
 		cdef np.ndarray[long, ndim=2] np_links = np.zeros((links.size(),2), 
 		                                                  dtype=long)
@@ -201,46 +251,69 @@ cdef class VoronoiDelaunayTesselation:
 		                                              dtype=np.float32)
 		cdef np.ndarray[float, ndim=1] lat = np.zeros(nodes.size(), 
 		                                              dtype=np.float32)
-		
+
 		cdef size_t i
 		cdef double r2d = 180.0/np.pi
 		for i in range(nodes.size()):
 			lon[i] = r2d*nodes[i].lon
 			lat[i] = r2d*nodes[i].lat
-		
+
 		for i in range(links.size()):
 			np_links[i,0] = links[i].i
 			np_links[i,1] = links[i].j
-		
+
 		# Return numpy arrays:
 		return lon, lat, np_links
-	
-	# Delaunay triangulation:
+
+
 	def delaunay_triangulation(self):
+		"""
+		Obtain the Delaunay triangulation as a link list.
+
+		Returns:
+		   links : Two-dimensional Mx2 numpy array representing
+		           the Delauany triangulation link list.
+
+		The pair (i,j)=links[k,:] indicates a link between the
+		nodes i and j of the generator node set. Both indices
+		refer to the position in the flattened generating
+		longitude/latitude arrays.
+		"""
 		# Sanity check:
 		if not self.tesselation:
 			raise Exception("VoronoiDelaunayTesselation() :\nVDTesselation "
 				"was not initialized!\n")
-		
+
 		# Obtain vector of links:
 		cdef vector[Link] links
 		dereference(self.tesselation).delaunay_triangulation(links)
-		
+
 		# Copy to numpy array:
 		cdef np.ndarray[long, ndim=2] np_links = np.zeros((links.size(),2), 
 		                                                  dtype=long)
-		
+
 		cdef size_t i
 		for i in range(links.size()):
 			np_links[i,0] = links[i].i
 			np_links[i,1] = links[i].j
-		
+
 		# Return numpy arrays:
 		return np_links
-	
-	
-	# Delaunay triangles:
+
+
 	def delaunay_triangles(self):
+		"""
+		Obtain the Delaunay triangulation as a set of triangles.
+
+		Returns:
+		   triangles : A Tx3 numpy array representing the triangles
+		               of the Delauany triangulation.
+
+		The triple (i,j,k)=triangles[l,:] indicates a triangle
+		consisting of the nodes i, j, and k of the generator
+		node set. Node numbering refers to flattened indices
+		of the generating longitude/latitude arrays.
+		"""
 		# Sanity check:
 		if not self.tesselation:
 			raise Exception("VoronoiDelaunayTesselation() :\nVDTesselation "
@@ -258,8 +331,27 @@ cdef class VoronoiDelaunayTesselation:
 		return triangles
 
 
-	# Nodes of the network associated to a set of Voronoi nodes:
 	def associated_nodes(self, np.ndarray[long, ndim=1] voronoi_nodes):
+		"""
+		Obtain the combined set of generator nodes associated
+		to a set of nodes of the Voronoi tesselation, i.e.
+		whose Voronoi cells have at least one of the given
+		Voronoi node set as their vertices.
+
+		Required arguments:
+		   voronoi_nodes : The set of nodes of the Voronoi
+		                   tesselation for each of which the
+		                   neighbourhood shall be calculated.
+		                   Needs to be convertible to a flat
+		                   numpy array.
+
+		Returns:
+		   A flat numpy array of node indices of generator
+		   nodes that are associated in the described sense
+		   to the given Voronoi tesselation vertices.
+		   The node indices refer to the linear index in
+		   the flat generating longitude/latitude arrays.
+		"""
 		# Sanity checks:
 		if not self.tesselation:
 			raise Exception("VoronoiDelaunayTesselation.associated_nodes():\n"
