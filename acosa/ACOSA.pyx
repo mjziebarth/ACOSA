@@ -120,33 +120,36 @@ cdef class VoronoiDelaunayTesselation:
 	cdef VDTesselation* tesselation
 	
 	# Constructor:
-	def __cinit__(self, np.ndarray[float, ndim=1] lon,
-	              np.ndarray[float, ndim=1] lat,
-	              double tolerance = 1e-10
+	def __cinit__(self, lon, lat, tolerance = 1e-10
 	    ):
 		"""
 		Will throw a runtime error if VDTesselation failed.
 		"""
+		# Input safety:
+		cdef np.ndarray[double, ndim=1, cast=True] lon_fix \
+		   = np.atleast_1d(np.deg2rad(lon).astype(float).flatten())
+		cdef np.ndarray[double, ndim=1, cast=True] lat_fix \
+		   = np.atleast_1d(np.deg2rad(lat).astype(float).flatten())
+		cdef double _tolerance = float(tolerance)
+
 		# Sanity checks:
 		cdef size_t N
-		N = len(lon)
+		N = len(lon_fix)
 	
-		if (len(lat) != N):
+		if (len(lat_fix) != N):
 			raise Exception("VoronoiDelaunayTesselation() :\nLength of longitude "
 				"and latitude arrays not equal!")
 		
 		# Copy numpy arrays to c++ vectors:
 		cdef size_t i
-		cdef double d2r = np.pi/180.0
-	
 		cdef vector[Node] nodes
 		nodes.resize(N)
 		for i in range(N):
-			nodes[i].lon = d2r*lon[i]
-			nodes[i].lat = d2r*lat[i]
+			nodes[i].lon = lon_fix[i]
+			nodes[i].lat = lat_fix[i]
 		
 		# Create VDTesselation object:
-		self.tesselation = new VDTesselation(nodes,tolerance)
+		self.tesselation = new VDTesselation(nodes,_tolerance)
 		
 		if not self.tesselation:
 			raise Exception("VoronoiDelaunayTesselation() :\nCould not allocate "
