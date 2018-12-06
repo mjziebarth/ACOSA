@@ -386,14 +386,49 @@ cdef class VoronoiDelaunayTesselation:
 
 ################################################################################
 cdef class PyConvexHull:
+	"""
+	A wrapper class around the ConvexHull C++ class, computing the
+	on-sphere convex hull of a set of points on the unit sphere in
+	O(N*log(N)) time using Graham's scan.
+
+	This implementation may show numerical instabilities if points
+	lie too dense. In that case, using the AlphaShape for alpha=0
+	may be worthwhile to test.
+	"""
 	cdef ConvexHull* hull
 
 	# Constructor:
 	def __cinit__(self, lon, lat, lon_inside, lat_inside, tolerance=1e-12):
-		# Sanity checks:
-		assert isinstance(lon,np.ndarray)
-		assert isinstance(lat,np.ndarray)
+		"""
+		Compute the convex hull of a given point set using Graham's
+		scan. Raises a runtime error if the algorithm failed to
+		produce a valid convex hull.
 
+		Required arguments:
+		   lon        : Set of longitude coordinates of the point set.
+		   lat        : Set of latitude coordinates of the point set.
+		                Both lon and lat need to be flattenable, of
+		                equal size, and their flat indexing needs to
+		                be in same order.
+		   lon_inside : Longitude of a point inside the convex hull,
+		                which is used as the Graham's scan anchor.
+		   lat_inside : Latitude of that point.
+
+		Optional keyword arguments:
+		   tolerance  : A numerical tolerance parameter used in the
+		                geometrical comparisons. Tuning this
+		                parameter may be worthwhile if the algorithm
+		                fails.
+		                (Default: 1e-12)
+		"""
+		# Input safety:
+		cdef np.ndarray[double, ndim=1, cast=True] lon_fix \
+		   = np.atleast_1d(np.deg2rad(lon).astype(float).flatten())
+		cdef np.ndarray[double, ndim=1, cast=True] lat_fix \
+		   = np.atleast_1d(np.deg2rad(lat).astype(float).flatten())
+		cdef double _tolerance = float(tolerance)
+
+		# Sanity check of input array dimensions:
 		cdef size_t N
 		N = len(lon)
 
@@ -412,8 +447,8 @@ cdef class PyConvexHull:
 		cdef vector[Node] nodes
 		nodes.resize(N)
 		for i in range(N):
-			nodes[i].lon = d2r*lon[i]
-			nodes[i].lat = d2r*lat[i]
+			nodes[i].lon = lon_fix[i]
+			nodes[i].lat = lat_fix[i]
 
 		# Create VDTesselation object:
 		self.hull= new ConvexHull(nodes, inside, tolerance=_tolerance)
@@ -422,13 +457,24 @@ cdef class PyConvexHull:
 			raise Exception("PyConvexHull() :\nCould not allocate "
 				"ConvexHull object!")
 
-	# Destructor:
+
 	def __dealloc__(self):
+		"""
+		The destructor.
+		"""
 		if self.hull:
 			del self.hull
 
-	# Obtain list of hull nodes:
+
 	def nodes(self):
+		"""
+		Return the set of nodes that form the convex hull.
+
+		Returns:
+		   A one-dimensional numpy array containing the indices
+		   of the convex hull nodes. The indices refer to the
+		   flattened generator set.
+		"""
 		if not self.hull:
 			return None
 
@@ -444,7 +490,7 @@ cdef class PyConvexHull:
 
 		return nodes
 
-	# Check if nodes are contained in the convex hull:
+
 	def contains(self, lon, lat):
 		"""
 		Query whether the convex hull contains a set of
@@ -499,13 +545,17 @@ cdef class PyConvexHull:
 		return contained
 
 
-	# Calculate distances to border of convex hull:
 	def distance_to_border(self, lon, lat):
 		"""
-		Calculates the distance of nodes inside this convex hull to the
-		hull's borders.
-		
-		Raises exception if given any of the given coordinates are outside the hull.
+		Calculates the distance of nodes inside this convex
+		hull to the hull's borders.
+
+		Required arguments:
+		   lon, lat : Numpy arrays of longitude and latitude
+		              coordinates in degrees.
+
+		Raises an exception if any of the given coordinates
+		are outside the hull.
 		"""
 		# Convert latlon to known types:
 		cdef np.ndarray[double, ndim=1, cast=True] lon_fix \
@@ -580,7 +630,7 @@ cdef class PyAlphaSpectrum:
 	
 	Bibliography:
 	
-	[2] Herbert Edelsbrunner et al.: On the Shape of a Set of Points in the
+	[1] Herbert Edelsbrunner et al.: On the Shape of a Set of Points in the
 	    Plane, in: IEEE Transactions on Information Theory, Vol. 29, No. 4,
 	    July 1983
 	"""
