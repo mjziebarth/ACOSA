@@ -515,6 +515,14 @@ cdef class PyConvexHull:
 		cdef np.ndarray[double, ndim=1, cast=True] lat_fix \
 		   = np.atleast_1d(np.deg2rad(lat).astype(float).flatten())
 
+		# Handle shaped input arrays:
+		if isinstance(lon,np.ndarray):
+			shape = lon.shape
+			assert isinstance(lat,np.ndarray)
+			assert np.array_equal(shape,lat.shape)
+		else:
+			shape = None
+
 		# Sanity checks:
 		cdef size_t N
 		N = len(lon_fix)
@@ -542,7 +550,11 @@ cdef class PyConvexHull:
 			node.lat = lat_fix[i]
 			contained[i] = dereference(self.hull).is_contained(node)
 
-		return contained
+		# Handle shaped input arrays:
+		if shaped is None:
+			return contained
+		else:
+			return contained.reshape(shape)
 
 
 	def distance_to_border(self, lon, lat):
