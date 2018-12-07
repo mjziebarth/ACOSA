@@ -57,7 +57,7 @@ class ConvexHull {
 
 		bool empty() const;
 
-		bool is_contained(const Node& node) const;
+		bool is_contained(const Node& node, ToleranceMode mode = ToleranceMode::INCLUSIVE) const;
 
 		/*!
 		 * \brief For each node, calculate the shortest distance to the hull's

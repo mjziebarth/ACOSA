@@ -24,6 +24,9 @@
 
 namespace ACOSA {
 
+/* The tolerance mode is used in some comparisons with
+ * tolerance: */
+enum class ToleranceMode {INCLUSIVE, EXACT, EXCLUSIVE};
 
 static constexpr size_t NO_LINK = std::numeric_limits<size_t>::max();
 

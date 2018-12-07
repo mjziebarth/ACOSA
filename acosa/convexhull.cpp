@@ -298,12 +298,27 @@ bool ConvexHull::empty() const
 	return hull_node_ids.empty();
 }
 
-		
-bool ConvexHull::is_contained(const Node& node) const
+bool ConvexHull::is_contained(const Node& node, ToleranceMode mode) const
 {
 	SphereVectorEuclid vec(node);
+	/* The direction of the hill segment normals is the inside of the
+	 * hull. Thus, a vector is inside the hull (we include the border) if
+	 * its dot product with all segment normals is positive or zero.
+	 * Thus, if any dot product is negative, it lies outside the hull.
+	 * This is the exlusion criterion. To implement the tolerance,
+	 * proceed as follows:
+	 *    - INCLUSIVE:  Allow small negative dot products with a maximum
+	 *                  value of -tolerance.
+	 *    - EXCLUSIVE:  Be strict about containment, exclude also dot
+	 *                  product values smaller than tolerance.
+	 *    - EXACT:      Exclude all dot product values smaller zero,
+	 *                  no tolerance in either direction.
+	 */
+	const double compare = (mode == ToleranceMode::INCLUSIVE) ? -tolerance :
+	                       (mode == ToleranceMode::EXCLUSIVE) ? tolerance :
+	                       0.0;
 	for (const SphereVectorEuclid& segment : hull_segment_normals){
-		if (segment * vec < -tolerance)
+		if (segment * vec < compare)
 			return false;
 	}
 	return true;
