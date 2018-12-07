@@ -47,16 +47,16 @@ class ConvexHull {
 		 */
 		ConvexHull(const std::vector<Node>& nodes, const Node& inside,
 		           double tolerance = 1e-12, bool sanity_check=true,
-		           bool throw_on_fail=false);
-		
+		           bool throw_on_fail=true);
+
 		std::vector<size_t>::const_iterator begin() const;
-		
+
 		std::vector<size_t>::const_iterator end() const;
-		
+
 		size_t size() const;
 
 		bool empty() const;
-		
+
 		bool is_contained(const Node& node) const;
 
 		/*!

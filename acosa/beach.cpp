@@ -307,18 +307,18 @@ bool BeachIterator::is_valid() const
 /*                            class Beach                             */
 /* ****************************************************************** */
 Beach::Beach(size_t id1, const SphereVector& v1, size_t id2,
-	         const SphereVector& v2)
+             const SphereVector& v2)
     : compare(&tide, &anchor, &first_arc), data(compare)
 {
 	tide =   v2.lat();
 	anchor = v1.lon();
-	OrderParameter middle 
-		= OrderParameter::between(OrderParameter::max(),
-		                          OrderParameter::min());
+	OrderParameter middle
+	    = OrderParameter::between(OrderParameter::max(),
+	                              OrderParameter::min());
 	OrderParameter left
-		= OrderParameter::between(OrderParameter::min(), middle);
-	OrderParameter right 
-		= OrderParameter::between(OrderParameter::max(), middle);
+	    = OrderParameter::between(OrderParameter::min(), middle);
+	OrderParameter right
+	    = OrderParameter::between(OrderParameter::max(), middle);
 	ArcIntersect b1(left, id1, v1, v2);
 	ArcIntersect b2(right, id2, v2, v1);
 	data.insert(BeachSite(b1, BeachSiteData()));
@@ -353,7 +353,10 @@ Beach::Beach(const std::vector<size_t>& ids,
 	 *         pole: */
 	l = vecs.size()-1;
 	for (size_t i=0; i<vecs.size(); ++i){
-		CircleEvent event(0.25*M_PI, iterators[i]);
+		/* This circle event's circumcenter is the north pole (lat=0.5pi).
+		 * Its tide is thus 0.5pi + dist(northpole, vec) = 0.5pi + (0.5pi-tide)
+		 */
+		CircleEvent event(M_PI-tide, iterators[i]);
 		event.set_valid();
 		circle_events.push(event);
 		iterators[i]->second.register_circle_event_ptr(event.valid_);

@@ -107,7 +107,7 @@ class Beach {
 	friend class BeachIterator;
 	
 	public:
-		Beach(size_t id1, const SphereVector& v1, size_t id2,
+	    Beach(size_t id1, const SphereVector& v1, size_t id2,
 		      const SphereVector& v2);
 
 		Beach(const std::vector<size_t>& ids,

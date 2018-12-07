@@ -45,6 +45,8 @@ static constexpr unsigned char VORONOI_LINKS_CACHED =  4;
 static constexpr unsigned char VORONOI_CELLS_CACHED =  8;
 static constexpr unsigned char DUAL_LINKS_CACHED    = 16;
 
+static constexpr unsigned char ALL_CACHED = 0xFF;
+
 
 static void
 delaunay_triangulation_brute_force(const std::vector<Node>& nodes,
@@ -104,6 +106,69 @@ delaunay_triangulation_brute_force(const std::vector<Node>& nodes,
 	}
 }
 
+//------------------------------------------------------------------------------
+
+static void tesselation_N3(const Node& n1, const Node& n2, const Node& n3,
+                           std::vector<Triangle>& delaunay_triangles,
+                           std::vector<size_t>& delaunay2voronoi,
+                           std::vector<std::forward_list<size_t>>& voronoi2delaunay,
+                           std::vector<Link>& delaunay_links,
+                           std::vector<size_t>& dual_link_delaunay2voronoi,
+                           std::vector<Node>& voronoi_nodes,
+                           std::vector<double>& voronoi_areas)
+{
+	/* Delaunay triangulation: */
+	delaunay_triangles.push_back({0,1,2});
+	delaunay_triangles.push_back({0,2,1});
+	delaunay_links.push_back({0,1});
+	delaunay_links.push_back({0,2});
+	delaunay_links.push_back({1,2});
+
+	/* Voronoi nodes: */
+	SphereVectorEuclid v1(n1), v2(n2), v3(n3);
+	voronoi_nodes.push_back(SphereVectorEuclid::circumcenter(v1, v2, v3));
+	voronoi_nodes.push_back(SphereVectorEuclid::circumcenter(v1, v3, v2));
+
+	/* Maps between Voronoi and Delaunay: */
+	delaunay2voronoi.push_back(0);
+	delaunay2voronoi.push_back(1);
+	voronoi2delaunay.resize(2);
+	voronoi2delaunay[0].push_front(0);
+	voronoi2delaunay[1].push_front(1);
+	dual_link_delaunay2voronoi.resize(delaunay_links.size(), ACOSA::NO_LINK);
+
+	/* Voronoi areas: Calculate longitude of nodes in a coordinate system */
+	SphereVectorEuclid axis(voronoi_nodes[0]);
+	SphereVector s1 = axis.cross(v1);
+	SphereVector s2 = axis.cross(v2);
+	SphereVector s3 = axis.cross(v3);
+
+	/* Now calculate slices of the sphere that each of the three nodes
+	 * conquers: */
+	double d1 = s1.distance(s2);
+	double d2 = s1.distance(s3);
+	double d3 = s2.distance(s3);
+	/* The longest distance belongs to the slice that is the other way round
+	 * the globe: */
+	if (d1 > d2){
+		if (d1 > d3){
+			d1 = 2*M_PI - d2 - d3;
+		} else {
+			d3 = 2*M_PI - d1 - d2;
+		}
+	} else {
+		if (d2 > d3){
+			d2 = 2*M_PI - d1 - d3;
+		} else {
+			d3 = 2*M_PI - d1 - d2;
+		}
+	}
+	voronoi_areas.resize(3);
+	voronoi_areas[0] = d1+d2;
+	voronoi_areas[1] = d1+d3;
+	voronoi_areas[2] = d2+d3;
+}
+
 
 
 //------------------------------------------------------------------------------
@@ -113,47 +178,108 @@ VDTesselation::VDTesselation(const std::vector<Node>& nodes,
 							 int checks, bool on_error_display_nodes)
     : nodes(nodes), cache_state(0), N(nodes.size()), tolerance(tolerance)
 {
-	try {
-		if (algorithm == FORTUNES){
-			/* Do Fortune's algorithm: */
-			delaunay_triangulation_sphere(nodes, delaunay_triangles_,
-			                              tolerance);
-		} else if (algorithm == BRUTE_FORCE) {
-			/* Do a brute force algorithm: */
-			std::cout << "WARNING :\nBRUTE_FORCE algorithm is probably broken "
-			             "on lattices that have more than three nodes on a "
-			             "circumcircle (e.g. regular lattices).\n";
-			delaunay_triangulation_brute_force(nodes, delaunay_triangles_,
-			                                   tolerance);
+	/* Special cases: N <= 3: */
+	if (N <= 3){
+		if (N == 0)
+		{
+			/* Empty node sets: Do nothing. */
 		}
-
-		/* Consistency checks: */
-
-		if (checks & CHECK_DUAL_LINKS){
-			/* If the Delaunay triangulation is inconsistent in a way that not
-			 * for every link a dual link of the Voronoi tesselation can be
-			 * found, this will raise an exception: */
-			calculate_dual_links();
+		else if (N == 1)
+		{
+			/* No links in Delaunay triangulation, no nodes or links in
+			 * Voronoi tesselation, but whole sphere belongs to node's
+			 * Voronoi cell: */
+			voronoi_areas.resize(1, 4*M_PI);
 		}
+		else if (N == 2)
+		{
+			/* No triangles in the Delaunay triangulation. We default to not
+			 * setting up a Delaunay triangulation.
+			 * Voronoi tesselation consists of one great-circle splitting the
+			 * sphere between both nodes. Since we cannot uniquely identify
+			 * Voronoi nodes, the Voronoi tesselation is left empty as well.
+			 * Both nodes, however, have a Voronoi cell area of 2pi. */
+			voronoi_areas.resize(2, 2*M_PI);
+		}
+		else
+		{
+			/* Case N==3 is a little bit more complex so we use a seperate
+			 * function.
+			 * Note that we cannot describe the Voronoi tesselation in the
+			 * framework used in this class as it allows only one link between
+			 * two Voronoi nodes. For a set of cocircular nodes, however, all
+			 * links are between just two Voronoi nodes.
+			 * Thus, we do not define the Voronoi network's links. */
+			tesselation_N3(nodes[0], nodes[1], nodes[2], delaunay_triangles_,
+			               delaunay2voronoi, voronoi2delaunay, delaunay_links,
+			               dual_link_delaunay2voronoi, voronoi_nodes,
+			               voronoi_areas);
+		}
+		/* All caches have been set up: */
+		cache_state = ALL_CACHED;
+	} else {
+		try {
+			if (algorithm == FORTUNES){
+				/* Do Fortune's algorithm: */
+				delaunay_triangulation_sphere(nodes, delaunay_triangles_,
+				                              tolerance);
 
-		if (checks & CHECK_VORONOI_CELL_AREAS){
-			/* Calculate Voronoi areas: */
-			calculate_voronoi_cell_areas();
-
-			/* Add up the cell areas: */
-			double sum = 0.0;
-			for (double d : voronoi_areas){
-				sum += d;
+			} else if (algorithm == BRUTE_FORCE) {
+				/* Do a brute force algorithm: */
+				std::cout << "WARNING :\nBRUTE_FORCE algorithm is probably "
+				             "broken on lattices that have more than three "
+				             "nodes on a circumcircle (e.g. regular lattices)"
+				             ".\n";
+				delaunay_triangulation_brute_force(nodes, delaunay_triangles_,
+				                                   tolerance);
 			}
 
-			/* Throw exception if we're more than 10*N times further away
-			 * from 4pi than tolerance: */
-			if (std::abs(sum - 4*M_PI) > 10.0*N*tolerance){
-				throw std::runtime_error("Sum of Voronoi areas (" +
-				                         std::to_string(sum) + ") is more than "
-				                         "10*N times farther than tolerance "
-				                         "away from 4pi!");
+			/* Consistency checks: */
+
+			if (checks & CHECK_DUAL_LINKS){
+				/* If the Delaunay triangulation is inconsistent in a way that
+				 * not for every link a dual link of the Voronoi tesselation can
+				 * be found, this will raise an exception: */
+				calculate_dual_links();
 			}
+
+			if (checks & CHECK_VORONOI_CELL_AREAS){
+				/* Calculate Voronoi areas: */
+				calculate_voronoi_cell_areas();
+
+				/* Add up the cell areas: */
+				double sum = 0.0;
+				for (double d : voronoi_areas){
+					sum += d;
+				}
+
+				/* Throw exception if we're more than 10*N times further away
+				 * from 4pi than tolerance: */
+				if (std::abs(sum - 4*M_PI) > 10.0*N*tolerance){
+					throw std::runtime_error("Sum of Voronoi areas (" +
+					                    std::to_string(sum) + ") is more than "
+					                    "10*N times farther than tolerance "
+					                    "away from 4pi=" +
+					                    std::to_string(4*M_PI) + "!");
+				}
+			}
+		} catch (const std::runtime_error& e){
+			/* Add a little hint to the error message: */
+			if (on_error_display_nodes){
+				std::cerr << "ERROR in VDTesselation().\nNode set that caused "
+				             "the error:\n";
+				std::cerr.precision(std::numeric_limits<double>::digits10);
+				for (const Node& n : nodes){
+					std::cerr << "\t(" << n.lon << "," << n.lat << ")\n";
+				}
+				std::cerr << "\n";
+			}
+
+			throw std::runtime_error("VDTesselation failed:\n\""
+			                         + std::string(e.what()) +
+			                         "\"\n\nHint: Changing tolerance "
+			                         "or inverting the latitude coordinates "
+			                         "may solve the problems encountered.\n");
 		}
 	} catch (const std::runtime_error& e){
 		/* Add a little hint to the error message: */
@@ -398,6 +524,61 @@ void VDTesselation::calculate_voronoi_nodes() const
 
 
 //------------------------------------------------------------------------------
+
+static void voronoi_network_concyclic(const std::vector<Node>& nodes,
+    std::vector<Node>& voronoi_nodes, std::vector<double>& voronoi_areas,
+    double tolerance)
+{
+	const size_t N = nodes.size();
+
+	/* Voronoi areas: Calculate longitude of nodes in a coordinate system
+	 * given by z vector voronoi_nodes[0] and x vector the z-orthogonal part
+	 * of nodes[0]: */
+	SphereVectorEuclid ax_z(voronoi_nodes[0]);
+	SphereVectorEuclid ax_x(nodes[0]);
+	ax_x = (ax_x - (ax_x*ax_z)*ax_z);
+	ax_x /= ax_x.norm();
+	SphereVectorEuclid ax_y = ax_z.cross(ax_x);
+	ax_y /= ax_y.norm(); // Precaution. Should be normed modulo rounding errors.
+	struct indexed_lon_t{
+		double val;
+		size_t id;
+
+		bool operator<(const indexed_lon_t& other) const {
+			return val < other.val;
+		}
+	};
+	std::vector<indexed_lon_t> lon(N);
+	lon[0] = {0.0, 0};
+	for (size_t i=1; i<N; ++i){
+		/* Calculate coordinates in system given by ax_x and ax_z: */
+		SphereVectorEuclid vec(nodes[i]);
+		double x = vec*ax_x;
+		double y = vec*ax_y;
+		lon[i].val = std::atan2(y,x);
+		if (lon[i].val < 0.0)
+			lon[i].val += M_PI;
+		lon[i].id = i;
+	}
+
+	/* Sort nodes by longitude in this coordinate system so that we have
+	 * neighbouring Voronoi cells next to each other: */
+	std::sort(lon.begin(), lon.end());
+
+	/* Now we can calculate the Voronoi cell areas: */
+	voronoi_areas.resize(N, 0.0);
+	for (size_t i=0; i<N; ++i){
+		double distance = lon[(i+1) % N].val - lon[i].val;
+		if (distance < 0.0)
+			/* May happen for i=N-1: */
+			distance += 2*M_PI;
+		voronoi_areas[i] += distance;
+		voronoi_areas[(i+1) % N] += distance;
+	}
+
+}
+
+//------------------------------------------------------------------------------
 void VDTesselation::calculate_voronoi_network() const
 {
 	/* Check if we've previously calculated the Voronoi network: */
@@ -406,6 +587,18 @@ void VDTesselation::calculate_voronoi_network() const
 
 	/* First make sure that Voronoi nodes are calculated: */
 	calculate_voronoi_nodes();
+
+	/* Handle the case that all nodes are concyclic (N>3) seperately: */
+	if (voronoi_nodes.size() == 2){
+		voronoi_network_concyclic(nodes, voronoi_nodes, voronoi_areas,
+		                          tolerance);
+
+		/* Cache state: */
+		cache_state |= (VORONOI_LINKS_CACHED | VORONOI_CELLS_CACHED);
+		tidy_up_cache();
+
+		return;
+	}
 
 	/* Init Voronoi cell area vector: */
 	voronoi_areas.resize(nodes.size(), 0.0);
@@ -560,6 +753,20 @@ void VDTesselation::calculate_dual_links() const
 	 * nodes: */
 	calculate_delaunay_links();
 	calculate_voronoi_network();
+
+	/* Handle case where all nodes are concyclic: */
+	if (voronoi_nodes.size() == 2){
+		/* Since we cannot define the Voronoi edges in the framework used
+		 * (which allows only at max one unique link between each Voronoi node
+		 *  pair), we have to set the dual mapping to NO_LINK: */
+		dual_link_delaunay2voronoi.resize(delaunay_triangles_.size(), NO_LINK);
+
+		/* Update cache state: */
+		cache_state |= DUAL_LINKS_CACHED;
+		tidy_up_cache();
+
+		return;
+	}
 
 	/* Create a map mapping all triangles a node is part of by the node's
 	 * index: */

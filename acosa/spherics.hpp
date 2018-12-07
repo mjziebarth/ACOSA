@@ -34,6 +34,8 @@ class SphereVector {
 		SphereVector();
 	
 		SphereVector(double lon, double lat);
+
+		SphereVector(const Node& node);
 		
 		bool null() const;
 		
@@ -42,6 +44,8 @@ class SphereVector {
 		double lat() const;
 
 		double distance(const SphereVector& other) const;
+
+		operator Node() const;
 		
 		static SphereVector circumcenter(
 			const SphereVector& v1, const SphereVector& v2,
@@ -108,6 +112,10 @@ class SphereVectorEuclid{
 		double lat() const;
 		
 		bool is_null() const;
+
+		operator Node() const;
+
+		operator SphereVector() const;
 		
 		/* Sphere operations: */
 		double distance(const SphereVectorEuclid& other) const;

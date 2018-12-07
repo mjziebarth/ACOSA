@@ -93,9 +93,8 @@ class AlphaShape {
  *    is a well-defined closed network.
  *
  * The adjustments made to accomodate for these facts are as follows:
- * - Whenever there are cases handling nodes of the convex hull, these cases may
- *   not occur at all in the spherical case. No adjustment needs to be done here
- *   however.
+ * - Lemma 2 proof, case a) does not necessarily hold true because of the lack
+ *   of semi-infinite lines. Handle all nodes as in case b).
  *
  * - Lemma 3 proof, case c) considers the semi-infinite Voronoi edges of nodes
  *   on the convex hull. Since the Voronoi edges on a sphere are finite, this

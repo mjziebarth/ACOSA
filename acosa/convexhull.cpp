@@ -22,12 +22,13 @@
 #include <math.h>
 #include <iostream>
 #include <stdexcept>
+#include <algorithm>
 
 namespace ACOSA {
 
 static bool is_convex(const SphereVectorEuclid& l,
-	const SphereVectorEuclid& m, const SphereVectorEuclid& r,
-	double lon, const SphereVectorEuclid& x0,
+    const SphereVectorEuclid& m, const SphereVectorEuclid& r,
+    double lon, const SphereVectorEuclid& x0,
     const SphereVectorEuclid& y0, double tolerance)
 {
 	/* Calculate the normal vector to the plane that corresponds to the
@@ -202,13 +203,67 @@ ConvexHull::ConvexHull(const std::vector<Node>& nodes,
 		hull_segment_normals[i] *= 1.0/hull_segment_normals[i].norm();
 	}
 
-	/* Sanity check: Throw if not all nodes contained. */
+
+	/* Sanity checks: */
 	if (sanity_check){
+		/* Sanity check 1: Throw if hull is empty or smaller than plausible: */
+		if (hull.size() < 3 && hull.size() < nodes.size()){
+			/* TODO : Test this part of the code. This is written and never
+			 *        tested. */
+			std::cerr << "Warning: You are entering uncharted territory in the "
+			             "source code! (convexhull.cpp, lines " << __LINE__ << "+)\n";
+			if (hull.size() == 0){
+				/* If nodes exist, hull must contain at least one element. */
+				if (throw_on_fail)
+					throw std::runtime_error("Convex hull failed: Node set not "
+					                         "empty but hull is.");
+			} else if (hull.size() == 1){
+				/* If hull is just one element, all nodes need to be equal. */
+				SphereVectorEuclid vc(nodes[0]);
+				if (!std::all_of(nodes.cbegin(),nodes.cend(),
+				                 [tolerance,&vc](const SphereVectorEuclid& v)
+				                   {return v.distance(vc) <= tolerance;}))
+				{
+					if (throw_on_fail){
+						throw std::runtime_error("Convex hull failed: Hull contains "
+						                         "only one element but node set "
+						                         "is not singular.");
+					} else {
+						hull_node_ids.clear();
+						hull_segment_normals.clear();
+					}
+				}
+			} else if (hull.size() == 2){
+				/* If hull is just two elements, all elements need to be
+				 * collinear, i.e. all the hull segment normals need to
+				 * be equal. */
+				SphereVectorEuclid vc(hull_segment_normals[0]);
+				if (!std::all_of(hull_segment_normals.cbegin(),
+				                 hull_segment_normals.cend(),
+				                 [tolerance,&vc](const SphereVectorEuclid& v)
+				                   {return std::min(v.distance(vc),v.distance(-vc))
+				                           <= tolerance;}
+				                ))
+				{
+					if (throw_on_fail){
+						throw std::runtime_error("Convex hull failed: Hull contains "
+						                         "only two elements but is not "
+						                         "collinear.");
+					} else {
+						hull_node_ids.clear();
+						hull_segment_normals.clear();
+					}
+				}
+			}
+			/* End of TODO */
+		}
+
+		/* Sanity check 2: Throw if not all nodes contained. */
 		for (const Node& n: nodes){
 			if (!is_contained(n)){
 				if (throw_on_fail){
 					/* Throw if hull could not be constructed: */
-					throw std::runtime_error("Convex hull failed: Not all"
+					throw std::runtime_error("Convex hull failed: Not all "
 					                         "nodes contained.\n");
 				} else {
 					/* This is the more silent way: Simply continue with
@@ -226,7 +281,7 @@ std::vector<size_t>::const_iterator ConvexHull::begin() const
 {
 	return hull_node_ids.cbegin();
 }
-		
+
 
 std::vector<size_t>::const_iterator ConvexHull::end() const
 {

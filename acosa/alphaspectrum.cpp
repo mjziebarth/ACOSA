@@ -24,8 +24,8 @@
  */
 
 #include <alphaspectrum.hpp>
-#include <convexhull.hpp>
 #include <unordered_set>
+#include <spherics.hpp>
 #include <cmath>
 
 #include <iostream>
@@ -33,75 +33,6 @@
 
 using ACOSA::AlphaSpectrum;
 using ACOSA::AlphaShape;
-
-//------------------------------------------------------------------------------
-static void calculate_convex_hull_members(const std::vector<ACOSA::Node>& nodes,
-                                          std::vector<bool>& is_ch_node,
-                                          const std::vector<ACOSA::Link>& links,
-                                          std::vector<bool>& is_ch_link)
-{
-	const size_t N = nodes.size();
-	const size_t M = links.size();
-
-	/* Resize vectors first: */
-	is_ch_node.resize(N, false);
-	is_ch_link.resize(M, false);
-
-	/* Calculate convex hull.
-	 * A vector inside the convex hull will be calculated as the node sets
-	 * mean (replace this by smalles circle). */
-	ACOSA::SphereVectorEuclid mean_vec(0,0,0);
-	for (size_t i=0; i<N; ++i){
-		mean_vec += ACOSA::SphereVectorEuclid(nodes[i].lon, nodes[i].lat);
-	}
-	mean_vec /= mean_vec.norm();
-
-	ACOSA::ConvexHull hull(nodes, ACOSA::Node(mean_vec.lon(), mean_vec.lat()));
-
-	/* Mark all nodes inside the hull and create ordered set of hull links: */
-	std::unordered_set<ACOSA::Link> hull_links;
-	auto it = hull.begin();
-	if (it != hull.end()){
-		/* Mark first node: */
-		size_t i = *it;
-		is_ch_node[i] = true;
-
-		/* For all following nodes, we mark the node and create a link to
-		 * the previous node: */
-		for (++it; it != hull.end(); ++it)
-		{
-			/* Mark node: */
-			size_t j = *it;
-			is_ch_node[j] = true;
-
-			/* Create link: */
-			if (i < j){
-				hull_links.emplace(i,j);
-			} else {
-				hull_links.emplace(j,i);
-			}
-
-			/* Next link starts from this node: */
-			i=j;
-		}
-
-		/* Create last link that completes the circle: */
-		if (hull.size() > 1){
-			size_t j=*hull.begin();
-			if (i < j){
-				hull_links.emplace(i,j);
-			} else {
-				hull_links.emplace(j,i);
-			}
-		}
-	}
-
-	/* Mark all links inside the hull: */
-	for (size_t i=0; i<M; ++i){
-		if (hull_links.count(links[i]))
-			is_ch_link[i] = true;
-	}
-}
 
 
 //------------------------------------------------------------------------------
@@ -119,15 +50,7 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 	tesselation.calculate_dual_links();
 
 
-	/* Step 2: Calculate the convex hull of the node set: */
-	std::vector<bool> is_convex_hull_node;
-	std::vector<bool> is_convex_hull_link;
-	calculate_convex_hull_members(nodes, is_convex_hull_node,
-	                              tesselation.delaunay_links,
-	                              is_convex_hull_link);
-
-
-	/* Step 3: Create a map from node indices to associated Voronoi cells.
+	/* Step 2: Create a map from node indices to associated Voronoi cells.
 	 *         The map may contain duplicates as some Delaunay triangles
 	 *         may have been merged to the same Voronoi node, but that
 	 *         should not make a big performance difference in most cases,
@@ -145,33 +68,33 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 	delaunay_links = tesselation.delaunay_links;
 
 
-	/* Step 4: For each node, calculate the maximum alpha where it is
+	/* Step 3: For each node, calculate the maximum alpha where it is
 	 * alpha-extreme (read: part of the alpha-shape): */
 	for (size_t i=0; i<N; ++i){
-		if (is_convex_hull_node[i]){
-			/* Case a) in [2], Lemma 2:
-			 * Convex hull points are trivially alpha-extreme for non-positive
-			 * alpha, which we're limited to here: */
-			node_max_alpha[i] = 0.0;
-		} else {
-			/* Case b) in [2], Lemma 2:
-			 * alph_max = -1/d_max, where d_max is the maximum distance of
-			 * node i to a point x of its Voronoi cell. This point is one
-			 * of the Voronoi cell's vertices, thus we need to check all
-			 * associated Voronoi vertices and take the distance of the
-			 * farthest away: */
-			ACOSA::SphereVector vec(nodes[i].lon, nodes[i].lat);
-			double max_dist = 0.0; // Bigger than Pi, max dist on sphere
-			for (size_t j : node2delaunay[i]){
-				const Node& n2 = tesselation.voronoi_nodes[tesselation
-				                    .delaunay2voronoi[j]];
-				double d = vec.distance(ACOSA::SphereVector(n2.lon, n2.lat));
-				if (d > max_dist)
-					max_dist = d;
-			}
-			node_max_alpha[i] = -1.0/max_dist;
-
+		/* Case a) in [2], Lemma 2 does not hold true for spherical topology:
+		 * A point being part of the convex hull guarantees that a 90° radius
+		 * circle (the great circles that connect it with its hull neighbours)
+		 * can be found inside which no other points of the set lie.
+		 * However, alpha shapes can be defined for 0 <= r < 180°, so that
+		 * in cases r > 90° there is no guarantee that a convex hull node is
+		 * also part of the alpha shape.
+		 * Thus skip this check and handle all points using ...
+		 * Case b) in [2], Lemma 2:
+		 * alph_max = -1/d_max, where d_max is the maximum distance of
+		 * node i to a point x of its Voronoi cell. This point is one
+		 * of the Voronoi cell's vertices, thus we need to check all
+		 * associated Voronoi vertices and take the distance of the
+		 * farthest away: */
+		ACOSA::SphereVector vec(nodes[i].lon, nodes[i].lat);
+		double max_dist = 0.0;
+		for (size_t j : node2delaunay[i]){
+			const Node& n2 = tesselation.voronoi_nodes[tesselation
+			                    .delaunay2voronoi[j]];
+			double d = vec.distance(ACOSA::SphereVector(n2.lon, n2.lat));
+			if (d > max_dist)
+				max_dist = d;
 		}
+		node_max_alpha[i] = -1.0/max_dist;
 	}
 
 
@@ -195,14 +118,6 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 		 * link: */
 		ACOSA::Link dl = tesselation.delaunay_links[i];
 		ACOSA::Link vl = tesselation.voronoi_links[dual_link];
-
-//      THIS CASE IS DIFFERENT IN A SPHERICAL TOPOLOGY AS WE DO NOT HAVE SEMI-
-//      INFINITE LINES!
-//		if (is_convex_hull_link[i]){
-//			/* Case c) in [2], Lemma 3:
-//			 * Here we ignore the fact that the line is not actually
-//			 * semi-infinite since we're on a sphere not in a plane. */
-//		} else {
 
 		/* Case a) in [2], Lemma 3:
 		 *		alpha \in [alpha_min, alpha_max]
@@ -253,6 +168,12 @@ AlphaSpectrum::AlphaSpectrum(const std::vector<ACOSA::Node>& nodes,
 //------------------------------------------------------------------------------
 AlphaShape AlphaSpectrum::operator()(double alpha) const
 {
+	/* If (alpha > -1/pi), the alpha shape is empty since pi is the maximum
+	 * radius on the sphere: */
+	std::vector<size_t> shape_nodes;
+	std::vector<ACOSA::Link> shape_links;
+	if (alpha > -1.0/M_PI)
+		return AlphaShape(shape_nodes, shape_links);
 
 	/* Determine all nodes of the shape at current alpha. Also generate a
 	 * map to map these nodes' indices in the original point set to indices in
@@ -262,7 +183,6 @@ AlphaShape AlphaSpectrum::operator()(double alpha) const
 		if (alpha < a)
 			++N;
 	}
-	std::vector<size_t> shape_nodes;
 	shape_nodes.reserve(N);
 	for (size_t i=0; i<node_max_alpha.size(); ++i){
 		if (alpha < node_max_alpha[i]){
@@ -276,7 +196,6 @@ AlphaShape AlphaSpectrum::operator()(double alpha) const
 		if (alpha <= I.max && alpha >= I.min)
 			++M;
 	}
-	std::vector<ACOSA::Link> shape_links;
 	shape_links.reserve(M);
 	for (size_t i=0; i<alpha_intervals.size(); ++i){
 		if (alpha <= alpha_intervals[i].max &&
