@@ -387,39 +387,40 @@ cdef class VoronoiDelaunayTesselation:
 ################################################################################
 cdef class PyConvexHull:
 	"""
+	PyConvexHull(lon, lat, lon_inside, lat_inside, tolerance=1e-12)
+
 	A wrapper class around the ConvexHull C++ class, computing the
 	on-sphere convex hull of a set of points on the unit sphere in
 	O(N*log(N)) time using Graham's scan.
 
 	This implementation may show numerical instabilities if points
-	lie too dense. In that case, using the AlphaShape for alpha=0
-	may be worthwhile to test.
+	lie too dense. If a non-valid convex hull was detectet, a
+	RuntimeError is thrown. In that case, using the AlphaShape for
+	alpha=-1/pi may be worthwhile to test.
+
+	Required arguments:
+	   lon        : Set of longitude coordinates of the point set.
+	   lat        : Set of latitude coordinates of the point set.
+	                Both lon and lat need to be flattenable, of
+	                equal size, and their flat indexing needs to
+	                be in same order.
+	   lon_inside : Longitude of a point inside the convex hull,
+	                which is used as the Graham's scan anchor.
+	   lat_inside : Latitude of that point.
+
+	Optional keyword arguments:
+	   tolerance  : A numerical tolerance parameter used in the
+	                geometrical comparisons. Tuning this
+	                parameter may be worthwhile if the algorithm
+	                fails.
+	                (Default: 1e-12)
 	"""
 	cdef ConvexHull* hull
 
-	# Constructor:
+
 	def __cinit__(self, lon, lat, lon_inside, lat_inside, tolerance=1e-12):
 		"""
-		Compute the convex hull of a given point set using Graham's
-		scan. Raises a runtime error if the algorithm failed to
-		produce a valid convex hull.
-
-		Required arguments:
-		   lon        : Set of longitude coordinates of the point set.
-		   lat        : Set of latitude coordinates of the point set.
-		                Both lon and lat need to be flattenable, of
-		                equal size, and their flat indexing needs to
-		                be in same order.
-		   lon_inside : Longitude of a point inside the convex hull,
-		                which is used as the Graham's scan anchor.
-		   lat_inside : Latitude of that point.
-
-		Optional keyword arguments:
-		   tolerance  : A numerical tolerance parameter used in the
-		                geometrical comparisons. Tuning this
-		                parameter may be worthwhile if the algorithm
-		                fails.
-		                (Default: 1e-12)
+		Constructor.
 		"""
 		# Input safety:
 		cdef np.ndarray[double, ndim=1, cast=True] lon_fix \
