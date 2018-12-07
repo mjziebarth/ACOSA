@@ -281,23 +281,6 @@ VDTesselation::VDTesselation(const std::vector<Node>& nodes,
 			                         "or inverting the latitude coordinates "
 			                         "may solve the problems encountered.\n");
 		}
-	} catch (const std::runtime_error& e){
-		/* Add a little hint to the error message: */
-		if (on_error_display_nodes){
-			std::cerr << "ERROR in VDTesselation().\nNode set that caused the "
-						 "error:\n";
-			std::cerr.precision(std::numeric_limits<double>::digits10);
-			for (const Node& n : nodes){
-				std::cerr << "\t(" << n.lon << "," << n.lat << ")\n";
-			}
-			std::cerr << "\n";
-		}
-
-		throw std::runtime_error("VDTesselation failed:\n\""
-		                         + std::string(e.what()) +
-		                         "\n\nHint: Changing tolerance "
-		                         "or inverting the latitude coordinates may "
-		                         "solve the problems encountered.\n");
 	}
 }
 
