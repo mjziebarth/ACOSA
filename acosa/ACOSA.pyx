@@ -88,7 +88,7 @@ cdef extern from "convexhull.hpp" namespace "ACOSA":
 
 # The AlphaSpectrum and AlphaShape classes:
 cdef extern from "alphaspectrum.hpp" namespace "ACOSA":
-	cdef cppclass AlphaShape :
+	cdef cppclass AlphaShape:
 		AlphaShape()
 		
 		AlphaShape(const vector[size_t]& nodes,
@@ -101,9 +101,9 @@ cdef extern from "alphaspectrum.hpp" namespace "ACOSA":
 		vector[Link] source_network_links() const
 	
 	
-	cdef cppclass AlphaSpectrum :
-		AlphaSpectrum(const vector[Node]& nodes,
-		              const VDTesselation& tesselation)
+	cdef cppclass CppAlphaSpectrum "ACOSA::AlphaSpectrum":
+		CppAlphaSpectrum(const vector[Node]& nodes,
+		                const VDTesselation& tesselation)
 		
 		AlphaShape operator()(double alpha) const
 
@@ -612,7 +612,7 @@ cdef class ConvexHull:
 
 
 ################################################################################
-cdef class PyAlphaSpectrum:
+cdef class AlphaSpectrum:
 	"""
 	A cython interface to the ACOSA C++ implementation of the AlphaSpectrum
 	class that implements the alpha sphere algorithm in [1] for negative
@@ -646,7 +646,7 @@ cdef class PyAlphaSpectrum:
 	    Plane, in: IEEE Transactions on Information Theory, Vol. 29, No. 4,
 	    July 1983
 	"""
-	cdef AlphaSpectrum* spectrum
+	cdef CppAlphaSpectrum* spectrum
 
 	# Constructor:
 	def __cinit__(self, lon, lat, vdtesselation=None):
@@ -680,7 +680,7 @@ cdef class PyAlphaSpectrum:
 		N = len(lon)
 
 		if (len(lat) != N):
-			raise Exception("PyAlphaSpectrum() :\nLength of "
+			raise Exception("AlphaSpectrum() :\nLength of "
 			                "longitude and latitude arrays not equal!")
 
 		# Create node vector:
@@ -701,9 +701,9 @@ cdef class PyAlphaSpectrum:
 		# Calculate Spectrum:
 		cdef VDTesselation* tess = vdt.tesselation
 		if not tess:
-			raise Exception("PyAlphaSpectrum() :\nTesselation not initialized!")
+			raise Exception("AlphaSpectrum() :\nTesselation not initialized!")
 
-		self.spectrum = new AlphaSpectrum(nodes,dereference(tess))
+		self.spectrum = new CppAlphaSpectrum(nodes,dereference(tess))
 
 		if not self.spectrum:
 			raise Exception("PyAlphaSpectrum() :\nCould not allocate "
@@ -731,11 +731,11 @@ cdef class PyAlphaSpectrum:
 		"""
 		# Sanity check:
 		if alpha > -1.0/np.pi:
-			raise Exception("PyAlphaSpectrum.__call__() : Only implemented "
+			raise Exception("AlphaSpectrum.__call__() : Only implemented "
 			                "for alpha <= -1.0/pi !")
 		
 		if not self.spectrum:
-			raise Exception("PyAlphaSpectrum.__call__() : Spectrum was not "
+			raise Exception("AlphaSpectrum.__call__() : Spectrum was not "
 			                "created!")
 		
 		# Create AlphaShape object:
