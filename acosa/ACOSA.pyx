@@ -70,8 +70,8 @@ cdef extern from "vdtesselation.hpp" namespace "ACOSA":
 
 # The ConvexHull class:
 cdef extern from "convexhull.hpp" namespace "ACOSA":
-	cdef cppclass ConvexHull :
-		ConvexHull(const vector[Node]& nodes, const Node& inside, double tolerance) except +
+	cdef cppclass CppConvexHull "ACOSA::ConvexHull":
+		CppConvexHull(const vector[Node]& nodes, const Node& inside, double tolerance) except +
 		
 		vector[size_t].const_iterator begin() const
 		
@@ -385,9 +385,9 @@ cdef class VoronoiDelaunayTesselation:
 
 
 ################################################################################
-cdef class PyConvexHull:
+cdef class ConvexHull:
 	"""
-	PyConvexHull(lon, lat, lon_inside, lat_inside, tolerance=1e-12)
+	ConvexHull(lon, lat, lon_inside, lat_inside, tolerance=1e-12)
 
 	A wrapper class around the ConvexHull C++ class, computing the
 	on-sphere convex hull of a set of points on the unit sphere in
@@ -415,7 +415,7 @@ cdef class PyConvexHull:
 	                fails.
 	                (Default: 1e-12)
 	"""
-	cdef ConvexHull* hull
+	cdef CppConvexHull* hull
 
 
 	def __cinit__(self, lon, lat, lon_inside, lat_inside, tolerance=1e-12):
@@ -434,7 +434,7 @@ cdef class PyConvexHull:
 		N = len(lon)
 
 		if (len(lat) != N):
-			raise Exception("PyConvexHull() :\nLength of longitude "
+			raise Exception("ConvexHull() :\nLength of longitude "
 				"and latitude arrays not equal!")
 
 		# Copy numpy arrays to c++ vectors:
@@ -451,11 +451,11 @@ cdef class PyConvexHull:
 			nodes[i].lat = lat_fix[i]
 
 		# Create VDTesselation object:
-		self.hull= new ConvexHull(nodes, inside, tolerance=_tolerance)
+		self.hull= new CppConvexHull(nodes, inside, tolerance=_tolerance)
 
 		if not self.hull:
-			raise Exception("PyConvexHull() :\nCould not allocate "
-				"ConvexHull object!")
+			raise Exception("ConvexHull() :\nCould not allocate "
+				"C++ ConvexHull object!")
 
 
 	def __dealloc__(self):
@@ -528,11 +528,11 @@ cdef class PyConvexHull:
 		N = len(lon_fix)
 
 		if (len(lat_fix) != N):
-			raise Exception("PyConvexHull.contains() :\nLength of longitude "
+			raise Exception("ConvexHull.contains() :\nLength of longitude "
 				"and latitude arrays not equal!")
 
 		if not self.hull:
-			raise Exception("PyConvexHull.contains() :\nNo hull object was "
+			raise Exception("ConvexHull.contains() :\nNo hull object was "
 				"allocated!")
 
 		cdef np.ndarray[np.uint8_t, ndim=1, cast=True] contained \
@@ -580,11 +580,11 @@ cdef class PyConvexHull:
 		N = len(lon_fix)
 
 		if (len(lat_fix) != N):
-			raise Exception("PyConvexHull.distance_to_border() :\nLength of "
+			raise Exception("ConvexHull.distance_to_border() :\nLength of "
 			                "longitude and latitude arrays not equal!")
 
 		if not self.hull:
-			raise Exception("PyConvexHull.distance_to_border() :\nNo hull "
+			raise Exception("ConvexHull.distance_to_border() :\nNo hull "
 			                "object was allocated!")
 
 		# Create node vector:
