@@ -31,6 +31,7 @@
 #include <vector>
 #include <forward_list>
 #include <basic_types.hpp>
+#include <limits>
 
 namespace ACOSA {
 
@@ -233,6 +234,7 @@ class VDTesselation {
 
 		/* Mapping links of the Delaunay triangulation to links of the
 		 * Voronoi tesselation: */
+		static constexpr size_t NO_LINK = std::numeric_limits<size_t>::max();
 		mutable std::vector<size_t> dual_link_delaunay2voronoi;
 		
 		/* Voronoi tesselation: */
