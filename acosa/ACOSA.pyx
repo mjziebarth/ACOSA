@@ -441,7 +441,6 @@ cdef class PyConvexHull:
 		cdef double d2r = np.pi/180.0
 		cdef double lon_i = lon_inside
 		cdef double lat_i = lat_inside
-		cdef double _tolerance = float(tolerance)
 		cdef Node inside = Node(d2r*lon_i, d2r*lat_i)
 
 		cdef vector[Node] nodes
@@ -551,7 +550,7 @@ cdef class PyConvexHull:
 			contained[i] = dereference(self.hull).is_contained(node)
 
 		# Handle shaped input arrays:
-		if shaped is None:
+		if shape is None:
 			return contained
 		else:
 			return contained.reshape(shape)
@@ -647,21 +646,22 @@ cdef class PyAlphaSpectrum:
 	    July 1983
 	"""
 	cdef AlphaSpectrum* spectrum
-	
+
 	# Constructor:
 	def __cinit__(self, lon, lat, vdtesselation=None):
 		"""
 		Initialize an AlphaSpectrum.
-		
-		Parameters:
-		:type lon: 1d numpy array (float)
-		:arg  lon: Longitude coordinates of point set.
-		
-		:type lat: 1d numpy array (float)
-		:arg  lat: Latitude coordinates of point set.
-		
-		:type vdtesselation: VoronoiDelaunayTesselation instance or None
-		:arg  vdtesselation: An instance of a Voronoi-Delaunay-tesselation of
+
+		Required arguments:
+		   lon : Longitude coordinates in degrees.
+		   lat : Latitude coordinates in degrees.
+
+		Both coordinate arrays need to be convertible to
+		one-dimensional numpy arrays. These one-dimensional
+		arrays define the indexing that is used later on.
+
+		Optional keyword arguments:
+		   vdtesselation : An instance of a VoronoiDelauanyTesselation of
 		                     the point set if already calculated. Optional: If
 		                     omitted, the tesselations will be calculated
 		                     internally.
@@ -691,11 +691,14 @@ cdef class PyAlphaSpectrum:
 			nodes[i].lat = lat_fix[i]
 
 		# If no Voronoi-Delaunay-Tesselation is given, compute it:
+		cdef VoronoiDelaunayTesselation vdt
 		if vdtesselation is None:
-			vdtesselation = VoronoiDelaunayTesselation(lon, lat)
+			vdt = VoronoiDelaunayTesselation(lon, lat)
+		else:
+			vdt = vdtesselation
 
 		# Calculate Spectrum:
-		cdef VDTesselation* tess = vdtesselation.tesselation
+		cdef VDTesselation* tess = vdt.tesselation
 		if not tess:
 			raise Exception("PyAlphaSpectrum() :\nTesselation not initialized!")
 
