@@ -730,9 +730,9 @@ cdef class PyAlphaSpectrum:
 		         indices in links to nodes.
 		"""
 		# Sanity check:
-		if alpha > 0:
+		if alpha > -1.0/np.pi:
 			raise Exception("PyAlphaSpectrum.__call__() : Only implemented "
-			                "for alpha<0 !")
+			                "for alpha <= -1.0/pi !")
 		
 		if not self.spectrum:
 			raise Exception("PyAlphaSpectrum.__call__() : Spectrum was not "
