@@ -649,11 +649,7 @@ cdef class PyAlphaSpectrum:
 	cdef AlphaSpectrum* spectrum
 	
 	# Constructor:
-	def __cinit__(self, np.ndarray[float, ndim=1] lon,
-	              np.ndarray[float, ndim=1] lat,
-	              VoronoiDelaunayTesselation vdtesselation=None
-	    ):
-		
+	def __cinit__(self, lon, lat, vdtesselation=None):
 		"""
 		Initialize an AlphaSpectrum.
 		
@@ -670,42 +666,46 @@ cdef class PyAlphaSpectrum:
 		                     omitted, the tesselations will be calculated
 		                     internally.
 		"""
-		
+		# Convert latlon to known types:
+		cdef np.ndarray[double, ndim=1, cast=True] lon_fix \
+		   = np.atleast_1d(np.deg2rad(lon).astype(float).flatten())
+		cdef np.ndarray[double, ndim=1, cast=True] lat_fix \
+		   = np.atleast_1d(np.deg2rad(lat).astype(float).flatten())
+		assert vdtesselation is None or \
+		   isinstance(vdtesselation,VoronoiDelaunayTesselation)
+
 		# Sanity checks:
 		cdef size_t N
 		N = len(lon)
-	
+
 		if (len(lat) != N):
 			raise Exception("PyAlphaSpectrum() :\nLength of "
 			                "longitude and latitude arrays not equal!")
-		
+
 		# Create node vector:
 		cdef vector[Node] nodes
-		cdef double d2r = np.pi/180.0
 		cdef size_t i
 		nodes.resize(N)
 		for i in range(N):
-			nodes[i].lon = d2r*lon[i]
-			nodes[i].lat = d2r*lat[i]
-		
-		
+			nodes[i].lon = lon_fix[i]
+			nodes[i].lat = lat_fix[i]
+
 		# If no Voronoi-Delaunay-Tesselation is given, compute it:
 		if vdtesselation is None:
 			vdtesselation = VoronoiDelaunayTesselation(lon, lat)
-		
-		
+
 		# Calculate Spectrum:
 		cdef VDTesselation* tess = vdtesselation.tesselation
 		if not tess:
 			raise Exception("PyAlphaSpectrum() :\nTesselation not initialized!")
-		
+
 		self.spectrum = new AlphaSpectrum(nodes,dereference(tess))
-		
+
 		if not self.spectrum:
 			raise Exception("PyAlphaSpectrum() :\nCould not allocate "
-				"AlphaSpectrum object!")
-	
-	
+			                "AlphaSpectrum object!")
+
+
 	# Destructor:
 	def __dealloc__(self):
 		if self.spectrum:
