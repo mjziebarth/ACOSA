@@ -45,8 +45,16 @@ class SphereVector {
 
 		double distance(const SphereVector& other) const;
 
+		double azimuth_to(const SphereVector& other) const;
+
 		operator Node() const;
+
+		bool operator==(const SphereVector& other) const;
+
+		bool operator==(const Node& other) const;
 		
+		bool operator!=(const SphereVector& other) const;
+
 		static SphereVector circumcenter(
 			const SphereVector& v1, const SphereVector& v2,
 			const SphereVector& v3);

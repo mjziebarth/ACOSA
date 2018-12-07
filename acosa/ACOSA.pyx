@@ -34,6 +34,13 @@ np.import_array()
 
 # Basic types:
 cdef extern from "basic_types.hpp" namespace "ACOSA":
+	cdef cppclass ToleranceMode:
+		pass
+
+	cdef ToleranceMode INCLUSIVE "ACOSA::ToleranceMode::INCLUSIVE"
+	cdef ToleranceMode EXACT "ACOSA::ToleranceMode::EXACT"
+	cdef ToleranceMode EXCLUSIVE "ACOSA::ToleranceMode::EXCLUSIVE"
+
 	cdef struct Triangle:
 		size_t i
 		size_t j
@@ -71,8 +78,9 @@ cdef extern from "vdtesselation.hpp" namespace "ACOSA":
 # The ConvexHull class:
 cdef extern from "convexhull.hpp" namespace "ACOSA":
 	cdef cppclass CppConvexHull "ACOSA::ConvexHull":
-		CppConvexHull(const vector[Node]& nodes, const Node& inside, double tolerance) except +
-		
+		CppConvexHull(const vector[Node]& nodes, const Node& inside, double tolerance,
+		              ToleranceMode mode, const bool euclidean_backend,
+		              bool sanity_check) except +
 		vector[size_t].const_iterator begin() const
 		
 		vector[size_t].const_iterator end() const
@@ -418,7 +426,9 @@ cdef class ConvexHull:
 	cdef CppConvexHull* hull
 
 
-	def __cinit__(self, lon, lat, lon_inside, lat_inside, tolerance=1e-12):
+	def __cinit__(self, lon, lat, lon_inside, lat_inside, tolerance=1e-12,
+	              tolerance_mode="inclusive", euclidean_backend=False,
+	              sanity_check=True):
 		"""
 		Constructor.
 		"""
@@ -428,6 +438,18 @@ cdef class ConvexHull:
 		cdef np.ndarray[double, ndim=1, cast=True] lat_fix \
 		   = np.atleast_1d(np.deg2rad(lat).astype(float).flatten())
 		cdef double _tolerance = float(tolerance)
+		cdef bool _euclidean_backend = euclidean_backend
+		cdef bool _sanity_check = sanity_check
+		cdef ToleranceMode _tolerance_mode
+
+		# Sanity check and assign tolerance mode:
+		assert tolerance_mode in ["inclusive", "exact", "exclusive"]
+		if tolerance_mode == "inclusive":
+			_tolerance_mode = INCLUSIVE
+		elif tolerance_mode == "exact":
+			_tolerance_mode = EXACT
+		else:
+			_tolerance_mode = EXCLUSIVE
 
 		# Sanity check of input array dimensions:
 		cdef size_t N
@@ -450,8 +472,10 @@ cdef class ConvexHull:
 			nodes[i].lon = lon_fix[i]
 			nodes[i].lat = lat_fix[i]
 
+
 		# Create VDTesselation object:
-		self.hull= new CppConvexHull(nodes, inside, tolerance=_tolerance)
+		self.hull= new CppConvexHull(nodes, inside, _tolerance, _tolerance_mode,
+		                             euclidean_backend, sanity_check)
 
 		if not self.hull:
 			raise Exception("ConvexHull() :\nCould not allocate "
@@ -489,6 +513,16 @@ cdef class ConvexHull:
 			preincrement(it)
 
 		return nodes
+
+
+	def size(self):
+		"""
+		Return the convex hull's size.
+		"""
+		if not self.hull:
+			return None
+
+		return dereference(self.hull).size()
 
 
 	def contains(self, lon, lat):

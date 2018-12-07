@@ -22,6 +22,7 @@
 #include <spherics.hpp>
 
 #include <vector>
+#include <map>
 
 namespace ACOSA {
 
@@ -34,6 +35,12 @@ class ConvexHull {
 		 * \param inside A vector pointing to the inside of the set.
 		 *        The point furthest away from this vector needs to be
 		 *        outside the convex hull.
+		 * \param tolerance A tolerance parameter for geometric comparisons.
+		 * \param mode The mode how to apply the tolerance parameter.
+		 *        Default: ToleranceMode::INCLUSIVE.
+		 * \param euclidean_backend Whether to use the Euclidean backend
+		 *        for convexity assessment (true) or the spherical one (false).
+		 *        Default: false
 		 * \param sanity_check If true, it is checked whether all nodes are
 		 *        contained in the convex hull within tolerance using
 		 *        is_contained. If one or more nodes are not contained, a
@@ -46,7 +53,10 @@ class ConvexHull {
 		 * Complexity of algorithm is O(N*log(N)).
 		 */
 		ConvexHull(const std::vector<Node>& nodes, const Node& inside,
-		           double tolerance = 1e-12, bool sanity_check=true,
+		           double tolerance = 1e-12,
+		           ToleranceMode mode = ToleranceMode::INCLUSIVE,
+		           const bool euclidean_backend=true,
+		           bool sanity_check=true,
 		           bool throw_on_fail=true);
 
 		std::vector<size_t>::const_iterator begin() const;
@@ -71,18 +81,39 @@ class ConvexHull {
 		 */
 		void distance_to_border(const std::vector<Node>& nodes,
 		                        std::vector<double>& distances) const;
-	
+
 	private:
+		/* Hull size: */
+		size_t size_;
+
+		/* Point inside the convex hull: */
+		SphereVector inside_point;
+
 		/* The indices of the nodes that form the convex hull: */
 		std::vector<size_t> hull_node_ids;
-		
+
 		/* Normal vectors onto the great circle planes that form
-		 * the hull segments. */
+		 * the hull segments.
+		 * This is used in the Euclidean backend. */
 		std::vector<SphereVectorEuclid>   hull_segment_normals;
+
+		/* The vectors of the nodes that form the convex hull.
+		 * This is used in the spherical backend. */
+		std::map<double,SphereVector> hull_vertices;
+		double azimuth_0;
 
 		/* A tolerance parameter for determining whether a node is inside
 		 * the hull: */
 		double tolerance;
+		ToleranceMode tolerance_mode;
+
+		/* A switch to toggle between the backends: */
+		bool euclidean_backend;
+
+
+		void init_euclidean(const std::vector<Node>& nodes);
+
+		void init_spherical(const std::vector<Node>& nodes);
 };
 
 } // NAMESPACE ACOSA

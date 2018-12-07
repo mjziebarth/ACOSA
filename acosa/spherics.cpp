@@ -90,12 +90,37 @@ double SphereVector::distance(const SphereVector& other) const
 	                  slat1*slat2 + clat1*clat2*cd);
 }
 
+double SphereVector::azimuth_to(const SphereVector& other) const
+{
+	/* Calculate the azimuth at this point of the great-circle
+	 * between this point and the other point. */
+	double dlon = other.lon_-lon_;
+	double y = std::sin(dlon);
+	double x = std::cos(lat_)*std::tan(other.lat_)
+	           - std::sin(lat_)*std::cos(dlon);
+	return std::atan2(y,x);
+}
+
 //------------------------------------------------------------------------------
 SphereVector::operator Node() const
 {
 	return Node(lon_, lat_);
 }
 
+bool SphereVector::operator==(const SphereVector& other) const
+{
+	return lon_ == other.lon_ && lat_ == other.lat_;
+}
+
+bool SphereVector::operator!=(const SphereVector& other) const
+{
+	return !operator==(other);
+}
+
+bool SphereVector::operator==(const Node& other) const
+{
+	return lon_ == other.lon && lat_ == other.lat;
+}
 
 //----------------------------------------------------------------------
 SphereVector SphereVector::circumcenter(const SphereVector& v1,
