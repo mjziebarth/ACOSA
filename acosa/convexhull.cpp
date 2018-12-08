@@ -16,6 +16,7 @@
  */
 
 #include <convexhull.hpp>
+#include <euclid.hpp>
 
 //#define _USE_MATH_DEFINES
 
@@ -224,13 +225,6 @@ void ConvexHull::init_euclidean(const std::vector<Node>& nodes)
  *************************************************************************/
 
 /* Stereographic projection: */
-struct Vector2d {
-	Vector2d(double x, double y) : x(x),y(y)
-	{};
-
-	double x;
-	double y;
-};
 
 static Vector2d oblique_stereographic(const SphereVector& x, const SphereVector& x0)
 {
@@ -262,10 +256,42 @@ static bool is_convex_stereographic(const SphereVector& l,
 	auto r_2d = oblique_stereographic(r, m);
 	auto x0_2d = oblique_stereographic(x0, m);
 
+#define PROJECTED_EUCLIDEAN
+#ifdef PROJECTED_EUCLIDEAN
+	/* Calculate a 2d vector normal to (r-l): */
+	Vector2d normal = (r_2d-l_2d).normal();
+
+	/* Determine the line offset at the origin: */
+	double origin_offset = (r_2d*normal);
+
+	/* If origin offset is smaller than tolerance, we may already
+	 * be finished, depending on tolerance handling: */
+	if (std::abs(origin_offset) < tolerance){
+		if (mode == ToleranceMode::INCLUSIVE){
+			return true;
+		} else if (mode == ToleranceMode::EXCLUSIVE){
+			return false;
+		} else if (origin_offset == 0.0) {
+			return true;
+		}
+	}
+
+	/* The offset vector normal to the line: */
+	Vector2d origin = origin_offset * normal;
+
+	/* Determine the offset of the inside-node at origin, thereby
+	 * giving us via the sign the in-side: */
+	double inside_sign = x0_2d * origin;
+
+	/* And that's it, if the sign is positive, it's a concave set,
+	 * otherwise it's convex! */
+	return inside_sign > 0.0;
+
+#else
 	/* Determine the azimuths in these projections: */
-	const double a_l  = atan2(l_2d.y, l_2d.x);
-	double a_r  = atan2(r_2d.y, r_2d.x);
-	double a_x0 = atan2(x0_2d.y, x0_2d.x);
+	const double a_l  = atan2(l_2d.y(), l_2d.x());
+	double a_r  = atan2(r_2d.y(), r_2d.x());
+	double a_x0 = atan2(x0_2d.y(), x0_2d.x());
 
 	/* Gauge them to the azimuth of point l: */
 	a_r = fmod(a_r - a_l + TWO_PI, TWO_PI);
@@ -290,6 +316,7 @@ static bool is_convex_stereographic(const SphereVector& l,
 		return std::abs(d_r) <= std::abs(d_x0)
 		       && (d_r < 0.0) == (d_x0 < 0.0);
 	}
+#endif
 
 	/* This should never be reached. */
 	throw std::runtime_error("Unreacheable code reached!");
